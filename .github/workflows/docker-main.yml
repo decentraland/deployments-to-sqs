@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    uses: decentraland/actions/build-quay-main.yml@main
+    uses: decentraland/actions/.github/workflows/build-quay-main.yml@main
     with:
       service-name: deployments-to-sqs
     secrets:
