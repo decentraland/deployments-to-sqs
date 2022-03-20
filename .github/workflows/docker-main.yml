@@ -1,4 +1,4 @@
-name: docker
+name: CI/CD on main branch
 
 on:
   push:
@@ -6,7 +6,7 @@ on:
       - "main"
 
 jobs:
-  build:
+  cd:
     uses: decentraland/actions/.github/workflows/build-quay-main.yml@main
     with:
       service-name: deployments-to-sqs
