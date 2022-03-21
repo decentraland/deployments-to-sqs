@@ -8,6 +8,7 @@
     "sourceMap": true,
     "experimentalDecorators": true,
     "pretty": true,
+    "esModuleInterop": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
     "noImplicitAny": true,

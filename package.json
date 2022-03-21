@@ -8,17 +8,20 @@
   "devDependencies": {
     "@types/node": "^14.17.33",
     "@well-known-components/test-helpers": "^1.3.0",
-    "typescript": "^4.5.5"
+    "typescript": "^4.6.2"
   },
   "prettier": {
     "printWidth": 120,
     "semi": false
   },
   "dependencies": {
+    "@dcl/snapshots-fetcher": "^3.0.2-20220320201032.commit-4750d95",
+    "@types/destroy": "^1.0.0",
     "@well-known-components/env-config-provider": "^1.1.1",
     "@well-known-components/http-server": "^1.1.1",
     "@well-known-components/interfaces": "^1.1.1",
     "@well-known-components/logger": "^1.1.0",
-    "@well-known-components/metrics": "^1.1.3"
+    "@well-known-components/metrics": "^1.1.3",
+    "destroy": "^1.2.0"
   }
 }

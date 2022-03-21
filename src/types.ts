@@ -1,3 +1,6 @@
+import { JobLifecycleManagerComponent } from "@dcl/snapshots-fetcher/dist/job-lifecycle-manager"
+import { IJobQueue } from "@dcl/snapshots-fetcher/dist/job-queue-port"
+import { IDeployerComponent } from "@dcl/snapshots-fetcher/dist/types"
 import type { IFetchComponent } from "@well-known-components/http-server"
 import type {
   IConfigComponent,
@@ -6,6 +9,8 @@ import type {
   IBaseComponent,
   IMetricsComponent,
 } from "@well-known-components/interfaces"
+import { IFileSystemComponent } from "./adapters/fs/types"
+import { IContentStorageComponent } from "./adapters/storage/types"
 import { metricDeclarations } from "./metrics"
 
 export type GlobalContext = {
@@ -18,7 +23,12 @@ export type BaseComponents = {
   logs: ILoggerComponent
   server: IHttpServerComponent<GlobalContext>
   fetch: IFetchComponent
+  downloadQueue: IJobQueue
   metrics: IMetricsComponent<keyof typeof metricDeclarations>
+  fs: IFileSystemComponent
+  storage: IContentStorageComponent
+  synchronizationJobManager: JobLifecycleManagerComponent
+  deployer: IDeployerComponent
 }
 
 // components used in runtime
