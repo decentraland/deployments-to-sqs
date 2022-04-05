@@ -15,7 +15,7 @@
     "semi": false
   },
   "dependencies": {
-    "@dcl/snapshots-fetcher": "^3.0.2-20220320201032.commit-4750d95",
+    "@dcl/snapshots-fetcher": "^3.0.2",
     "@types/destroy": "^1.0.0",
     "@well-known-components/env-config-provider": "^1.1.1",
     "@well-known-components/http-server": "^1.1.1",
