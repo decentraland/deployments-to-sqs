@@ -12,7 +12,6 @@ import type {
 import { IFileSystemComponent } from "./adapters/fs/types"
 import { IContentStorageComponent } from "./adapters/storage/types"
 import { metricDeclarations } from "./metrics"
-import { SNS } from "aws-sdk"
 
 export type GlobalContext = {
   components: BaseComponents
@@ -30,10 +29,10 @@ export type BaseComponents = {
   storage: IContentStorageComponent
   synchronizationJobManager: JobLifecycleManagerComponent
   deployer: IDeployerComponent
-  sns: SnsComponent | null
+  sns: SnsComponent
 }
 
-export type SnsComponent = { arn: string }
+export type SnsComponent = { arn?: string }
 
 // components used in runtime
 export type AppComponents = BaseComponents & {

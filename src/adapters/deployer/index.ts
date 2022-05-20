@@ -31,7 +31,7 @@ export function createDeployerComponent(
             logger.info("entity stored", { entityId: entity.entityId, entityType: entity.entityType })
             // send sns
 
-            if (components.sns) {
+            if (components.sns.arn) {
               const receipt = await sns
                 .publish({
                   TopicArn: components.sns.arn,

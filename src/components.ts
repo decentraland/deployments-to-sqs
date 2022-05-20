@@ -40,11 +40,9 @@ export async function initComponents(): Promise<AppComponents> {
     timeout: 100000,
   })
 
-  const sns: SnsComponent | null = snsArn
-    ? {
-        arn: snsArn,
-      }
-    : null
+  const sns: SnsComponent = {
+    arn: snsArn,
+  }
 
   const deployer = createDeployerComponent({ storage, downloadQueue, fetch, logs, metrics, sns })
 
