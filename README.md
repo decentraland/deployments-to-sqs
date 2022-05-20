@@ -1,2 +1,2 @@
-This service sends catalyst deployments to SQS
+This service sends catalyst deployments to SNS
 

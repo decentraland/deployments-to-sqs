@@ -3,8 +3,8 @@ import path from "path"
 import { pipeline, Readable } from "stream"
 import { promisify } from "util"
 import { AppComponents } from "../../types"
-import { compressContentFile } from "./compression"
 import { SimpleContentItem } from "./content-item"
+import { compressContentFile } from "./extras/compression"
 import { ContentEncoding, ContentItem, IContentStorageComponent } from "./types"
 
 const pipe = promisify(pipeline)
@@ -67,9 +67,14 @@ export async function createFolderBasedFileSystemContentStorage(
     return undefined
   }
 
+  async function exist(id: string): Promise<boolean> {
+    return !!(await retrieve(id))
+  }
+
   return {
     storeStream,
     retrieve,
+    exist,
     async storeStreamAndCompress(id: string, stream: Readable): Promise<void> {
       await storeStream(id, stream)
       if (await compressContentFile(await getFilePath(id))) {
@@ -89,8 +94,8 @@ export async function createFolderBasedFileSystemContentStorage(
         await noFailUnlink((await getFilePath(id)) + ".gzip")
       }
     },
-    async exist(id: string): Promise<boolean> {
-      return !!(await retrieve(id))
+    async existMultiple(ids: string[]): Promise<Map<string, boolean>> {
+      return Object.fromEntries(await Promise.all(ids.map((key) => [key, exist(key)])))
     },
   }
 }

@@ -12,6 +12,7 @@ import type {
 import { IFileSystemComponent } from "./adapters/fs/types"
 import { IContentStorageComponent } from "./adapters/storage/types"
 import { metricDeclarations } from "./metrics"
+import { SNS } from "aws-sdk"
 
 export type GlobalContext = {
   components: BaseComponents
@@ -29,6 +30,7 @@ export type BaseComponents = {
   storage: IContentStorageComponent
   synchronizationJobManager: JobLifecycleManagerComponent
   deployer: IDeployerComponent
+  sns: SNS
 }
 
 // components used in runtime

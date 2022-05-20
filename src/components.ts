@@ -11,6 +11,8 @@ import { createJobQueue } from "@dcl/snapshots-fetcher/dist/job-queue-port"
 import { createCatalystDeploymentStream } from "@dcl/snapshots-fetcher"
 import { createJobLifecycleManagerComponent } from "@dcl/snapshots-fetcher/dist/job-lifecycle-manager"
 import { createDeployerComponent } from "./adapters/deployer"
+import { SNS } from "aws-sdk"
+import { createS3BasedFileSystemContentStorage } from "./adapters/storage/s3-based-storage-component"
 
 // Initialize all the components of the app
 export async function initComponents(): Promise<AppComponents> {
@@ -25,15 +27,19 @@ export async function initComponents(): Promise<AppComponents> {
 
   const downloadsFolder = "content"
 
-  const storage = await createFolderBasedFileSystemContentStorage({ fs }, downloadsFolder)
+  const bucket = await config.getString("STORAGE_BUCKET")
+
+  const storage = bucket
+    ? await createS3BasedFileSystemContentStorage({ fs, config })
+    : await createFolderBasedFileSystemContentStorage({ fs }, downloadsFolder)
 
   const downloadQueue = createJobQueue({
     autoStart: true,
-    concurrency: 1,
+    concurrency: 5,
     timeout: 100000,
   })
 
-  const deployer = await createDeployerComponent()
+  const deployer = createDeployerComponent({ storage, downloadQueue, fetch, logs, metrics })
 
   const synchronizationJobManager = createJobLifecycleManagerComponent(
     { logs },
@@ -63,6 +69,8 @@ export async function initComponents(): Promise<AppComponents> {
     }
   )
 
+  const sns = new SNS({})
+
   return {
     config,
     logs,
@@ -75,5 +83,6 @@ export async function initComponents(): Promise<AppComponents> {
     downloadQueue,
     synchronizationJobManager,
     deployer,
+    sns,
   }
 }
