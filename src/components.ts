@@ -3,7 +3,7 @@ import { createServerComponent, createStatusCheckComponent } from "@well-known-c
 import { createLogComponent } from "@well-known-components/logger"
 import { createFetchComponent } from "./adapters/fetch"
 import { createMetricsComponent } from "@well-known-components/metrics"
-import { AppComponents, GlobalContext } from "./types"
+import { AppComponents, GlobalContext, SnsComponent } from "./types"
 import { metricDeclarations } from "./metrics"
 import { createFolderBasedFileSystemContentStorage } from "./adapters/storage/folder-based-storage-component"
 import { createFsComponent } from "./adapters/fs/fs-component"
@@ -28,6 +28,7 @@ export async function initComponents(): Promise<AppComponents> {
   const downloadsFolder = "content"
 
   const bucket = await config.getString("BUCKET")
+  const snsArn = await config.getString("SNS_ARN")
 
   const storage = bucket
     ? await createS3BasedFileSystemContentStorage({ fs, config }, bucket)
@@ -39,7 +40,13 @@ export async function initComponents(): Promise<AppComponents> {
     timeout: 100000,
   })
 
-  const deployer = createDeployerComponent({ storage, downloadQueue, fetch, logs, metrics })
+  const sns: SnsComponent | null = snsArn
+    ? {
+        arn: snsArn,
+      }
+    : null
+
+  const deployer = createDeployerComponent({ storage, downloadQueue, fetch, logs, metrics, sns })
 
   const synchronizationJobManager = createJobLifecycleManagerComponent(
     { logs },
@@ -68,8 +75,6 @@ export async function initComponents(): Promise<AppComponents> {
       },
     }
   )
-
-  const sns = new SNS({})
 
   return {
     config,

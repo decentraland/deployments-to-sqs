@@ -30,8 +30,10 @@ export type BaseComponents = {
   storage: IContentStorageComponent
   synchronizationJobManager: JobLifecycleManagerComponent
   deployer: IDeployerComponent
-  sns: SNS
+  sns: SnsComponent | null
 }
+
+export type SnsComponent = { arn: string }
 
 // components used in runtime
 export type AppComponents = BaseComponents & {
