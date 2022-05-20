@@ -30,7 +30,7 @@ export async function initComponents(): Promise<AppComponents> {
   const bucket = await config.getString("BUCKET")
 
   const storage = bucket
-    ? await createS3BasedFileSystemContentStorage({ fs, config })
+    ? await createS3BasedFileSystemContentStorage({ fs, config }, bucket)
     : await createFolderBasedFileSystemContentStorage({ fs }, downloadsFolder)
 
   const downloadQueue = createJobQueue({
