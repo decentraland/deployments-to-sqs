@@ -16,5 +16,5 @@ jobs:
   manual-redeploy:
     uses: decentraland/actions/.github/workflows/deploy-latest.yml@main
     with:
-      service-name: deployments-to-sns
+      service-name: deployments-to-sqs
       deployment-environment: ${{ github.event.inputs.environment }}
