@@ -19,7 +19,7 @@ export function createDeployerComponent(
           logger.info("downloading entity", { entityId: entity.entityId, entityType: entity.entityType })
 
           components.downloadQueue.scheduleJob(async () => {
-            const e = await downloadEntityAndContentFiles(
+            const file = await downloadEntityAndContentFiles(
               { ...components, fetcher: components.fetch },
               entity.entityId,
               servers,
@@ -35,7 +35,7 @@ export function createDeployerComponent(
               const receipt = await sns
                 .publish({
                   TopicArn: components.sns.arn,
-                  Message: JSON.stringify(entity),
+                  Message: JSON.stringify({ entity, file }),
                 })
                 .promise()
               logger.info("notification sent", {
