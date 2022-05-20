@@ -27,7 +27,7 @@ export async function initComponents(): Promise<AppComponents> {
 
   const downloadsFolder = "content"
 
-  const bucket = await config.getString("STORAGE_BUCKET")
+  const bucket = await config.getString("BUCKET")
 
   const storage = bucket
     ? await createS3BasedFileSystemContentStorage({ fs, config })
