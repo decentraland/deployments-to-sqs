@@ -9,8 +9,7 @@ import type {
   IBaseComponent,
   IMetricsComponent,
 } from "@well-known-components/interfaces"
-import { IFileSystemComponent } from "./adapters/fs/types"
-import { IContentStorageComponent } from "@dcl/catalyst-storage"
+import { IContentStorageComponent, IFileSystemComponent } from "@dcl/catalyst-storage"
 import { MockedStorage } from "@dcl/catalyst-storage/dist/MockedStorage"
 import { metricDeclarations } from "./metrics"
 

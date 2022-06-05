@@ -5,12 +5,11 @@ import { createFetchComponent } from "./adapters/fetch"
 import { createMetricsComponent } from "@well-known-components/metrics"
 import { AppComponents, GlobalContext, SnsComponent } from "./types"
 import { metricDeclarations } from "./metrics"
-import { createFsComponent } from "./adapters/fs/fs-component"
 import { createJobQueue } from "@dcl/snapshots-fetcher/dist/job-queue-port"
 import { createCatalystDeploymentStream } from "@dcl/snapshots-fetcher"
 import { createJobLifecycleManagerComponent } from "@dcl/snapshots-fetcher/dist/job-lifecycle-manager"
 import { createDeployerComponent } from "./adapters/deployer"
-import { createAwsS3BasedFileSystemContentStorage, createFolderBasedFileSystemContentStorage } from "@dcl/catalyst-storage"
+import { createAwsS3BasedFileSystemContentStorage, createFolderBasedFileSystemContentStorage, createFsComponent } from "@dcl/catalyst-storage"
 
 // Initialize all the components of the app
 export async function initComponents(): Promise<AppComponents> {
