@@ -5,14 +5,11 @@ import { createFetchComponent } from "./adapters/fetch"
 import { createMetricsComponent } from "@well-known-components/metrics"
 import { AppComponents, GlobalContext, SnsComponent } from "./types"
 import { metricDeclarations } from "./metrics"
-import { createFolderBasedFileSystemContentStorage } from "./adapters/storage/folder-based-storage-component"
-import { createFsComponent } from "./adapters/fs/fs-component"
 import { createJobQueue } from "@dcl/snapshots-fetcher/dist/job-queue-port"
 import { createCatalystDeploymentStream } from "@dcl/snapshots-fetcher"
 import { createJobLifecycleManagerComponent } from "@dcl/snapshots-fetcher/dist/job-lifecycle-manager"
 import { createDeployerComponent } from "./adapters/deployer"
-import { SNS } from "aws-sdk"
-import { createS3BasedFileSystemContentStorage } from "./adapters/storage/s3-based-storage-component"
+import { createAwsS3BasedFileSystemContentStorage, createFolderBasedFileSystemContentStorage, createFsComponent } from "@dcl/catalyst-storage"
 
 // Initialize all the components of the app
 export async function initComponents(): Promise<AppComponents> {
@@ -31,7 +28,7 @@ export async function initComponents(): Promise<AppComponents> {
   const snsArn = await config.getString("SNS_ARN")
 
   const storage = bucket
-    ? await createS3BasedFileSystemContentStorage({ fs, config }, bucket)
+    ? await createAwsS3BasedFileSystemContentStorage({ fs, config }, bucket)
     : await createFolderBasedFileSystemContentStorage({ fs }, downloadsFolder)
 
   const downloadQueue = createJobQueue({
