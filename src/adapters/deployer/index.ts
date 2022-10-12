@@ -12,7 +12,7 @@ export function createDeployerComponent(
 
   return {
     async deployEntity(entity, servers) {
-      if (entity.entityType == "scene" || entity.entityType == "wearable") {
+      if (entity.entityType == "scene" || entity.entityType == "wearable" || entity.entityType == "emote") {
         const exists = await components.storage.exist(entity.entityId)
 
         if (!exists) {
