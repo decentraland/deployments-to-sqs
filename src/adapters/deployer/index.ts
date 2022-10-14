@@ -18,7 +18,7 @@ export function createDeployerComponent(
         if (!exists) {
           logger.info("downloading entity", { entityId: entity.entityId, entityType: entity.entityType })
 
-          await components.downloadQueue.scheduleJob(async () => {
+          components.downloadQueue.scheduleJob(async () => {
             const file = await downloadEntityAndContentFiles(
               { ...components, fetcher: components.fetch },
               entity.entityId,
