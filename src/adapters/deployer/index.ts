@@ -35,7 +35,7 @@ export function createDeployerComponent(
               const receipt = await sns
                 .publish({
                   TopicArn: components.sns.arn,
-                  Message: JSON.stringify({ entity, file }),
+                  Message: JSON.stringify({ entity, file, baseUrls: servers }),
                 })
                 .promise()
               logger.info("notification sent", {
