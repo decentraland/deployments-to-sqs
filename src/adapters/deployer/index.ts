@@ -2,6 +2,7 @@ import { downloadEntityAndContentFiles } from "@dcl/snapshots-fetcher"
 import { IDeployerComponent } from "@dcl/snapshots-fetcher/dist/types"
 import { SNS } from "aws-sdk"
 import { AppComponents } from "../../types"
+import { DeploymentToSqs } from "@dcl/schemas/dist/misc/deployments-to-sqs";
 
 export function createDeployerComponent(
   components: Pick<AppComponents, "logs" | "storage" | "downloadQueue" | "fetch" | "metrics" | "sns">
@@ -32,10 +33,15 @@ export function createDeployerComponent(
             // send sns
 
             if (components.sns.arn) {
+              const deploymentToSqs: DeploymentToSqs = {
+                entity,
+                file,
+                contentServerUrls: servers,
+              }
               const receipt = await sns
                 .publish({
                   TopicArn: components.sns.arn,
-                  Message: JSON.stringify({ entity, file, baseUrls: servers }),
+                  Message: JSON.stringify(deploymentToSqs),
                 })
                 .promise()
               logger.info("notification sent", {
