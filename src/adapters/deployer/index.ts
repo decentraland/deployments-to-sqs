@@ -33,7 +33,7 @@ export function createDeployerComponent(
             // send sns
 
             if (components.sns.arn) {
-              const deploymentToSqs: DeploymentToSqs = {
+              const deploymentToSqs: DeploymentToSqs | { file: any }  = {
                 entity,
                 file,
                 contentServerUrls: servers,
