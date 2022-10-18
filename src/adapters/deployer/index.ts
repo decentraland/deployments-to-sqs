@@ -30,12 +30,11 @@ export function createDeployerComponent(
               1000
             )
             logger.info("entity stored", { entityId: entity.entityId, entityType: entity.entityType })
-            // send sns
 
+            // send sns
             if (components.sns.arn) {
-              const deploymentToSqs: DeploymentToSqs | { file: any } = {
+              const deploymentToSqs: DeploymentToSqs = {
                 entity,
-                file,
                 contentServerUrls: servers,
               }
               const receipt = await sns
