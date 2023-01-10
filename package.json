@@ -16,8 +16,8 @@
   },
   "dependencies": {
     "@dcl/schemas": "^5.22.0",
-    "@dcl/catalyst-storage": "^1.0.0",
-    "@dcl/snapshots-fetcher": "^3.0.2",
+    "@dcl/catalyst-storage": "^2.0.0",
+    "@dcl/snapshots-fetcher": "^5.0.1",
     "@types/destroy": "^1.0.0",
     "@well-known-components/env-config-provider": "^1.1.1",
     "@well-known-components/http-server": "^1.1.1",

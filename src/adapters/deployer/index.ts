@@ -2,7 +2,7 @@ import { downloadEntityAndContentFiles } from "@dcl/snapshots-fetcher"
 import { IDeployerComponent } from "@dcl/snapshots-fetcher/dist/types"
 import { SNS } from "aws-sdk"
 import { AppComponents } from "../../types"
-import { DeploymentToSqs } from "@dcl/schemas/dist/misc/deployments-to-sqs";
+import { DeploymentToSqs } from "@dcl/schemas/dist/misc/deployments-to-sqs"
 
 export function createDeployerComponent(
   components: Pick<AppComponents, "logs" | "storage" | "downloadQueue" | "fetch" | "metrics" | "sns">
@@ -48,10 +48,17 @@ export function createDeployerComponent(
                 SequenceNumber: receipt.SequenceNumber as any,
               })
             }
+            if (entity.markAsDeployed) {
+              await entity.markAsDeployed()
+            }
           })
+        }
+      } else {
+        if (entity.markAsDeployed) {
+          await entity.markAsDeployed()
         }
       }
     },
-    async onIdle() {},
+    async onIdle() { },
   }
 }

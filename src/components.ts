@@ -6,7 +6,7 @@ import { createMetricsComponent } from "@well-known-components/metrics"
 import { AppComponents, GlobalContext, SnsComponent } from "./types"
 import { metricDeclarations } from "./metrics"
 import { createJobQueue } from "@dcl/snapshots-fetcher/dist/job-queue-port"
-import { createCatalystDeploymentStream } from "@dcl/snapshots-fetcher"
+import { createSynchronizer } from "@dcl/snapshots-fetcher"
 import { createJobLifecycleManagerComponent } from "@dcl/snapshots-fetcher/dist/job-lifecycle-manager"
 import { createDeployerComponent } from "./adapters/deployer"
 import { createAwsS3BasedFileSystemContentStorage, createFolderBasedFileSystemContentStorage, createFsComponent } from "@dcl/catalyst-storage"
@@ -43,31 +43,55 @@ export async function initComponents(): Promise<AppComponents> {
 
   const deployer = createDeployerComponent({ storage, downloadQueue, fetch, logs, metrics, sns })
 
-  const synchronizationJobManager = createJobLifecycleManagerComponent(
-    { logs },
+  const processedSnapshots = new Set()
+  const processedSnapshotStorage = {
+    async processedFrom(snapshotHashes: string[]): Promise<Set<string>> {
+      return new Set(snapshotHashes.filter(h => processedSnapshots.has(h)))
+    },
+    async saveProcessed(snapshotHash: string): Promise<void> {
+      processedSnapshots.add(snapshotHash)
+    }
+  }
+
+  const snapshotStorage = {
+    async has(snapshotHas: string) {
+      return false
+    }
+  }
+
+  const synchronizer = await createSynchronizer(
     {
-      jobManagerName: "SynchronizationJobManager",
-      createJob(contentServer) {
-        return createCatalystDeploymentStream(
-          { logs, downloadQueue, fetcher: fetch, metrics, deployer, storage },
-          {
-            tmpDownloadFolder: downloadsFolder,
-            contentServer,
-
-            // time between every poll to /pointer-changes
-            pointerChangesWaitTime: 5000,
-
-            // reconnection time for the whole catalyst
-            reconnectTime: 1000 /* one second */,
-            reconnectRetryTimeExponent: 1.2,
-            maxReconnectionTime: 3_600_000 /* one hour */,
-
-            // download entities retry
-            requestMaxRetries: 10,
-            requestRetryWaitTime: 5000,
-          }
-        )
+      logs,
+      downloadQueue,
+      fetcher: fetch,
+      metrics,
+      deployer,
+      storage,
+      processedSnapshotStorage,
+      snapshotStorage
+    },
+    {
+      // reconnection options
+      bootstrapReconnection: {
+        reconnectTime: 5000 /* five second */,
+        reconnectRetryTimeExponent: 1.5,
+        maxReconnectionTime: 3_600_000 /* one hour */
       },
+      syncingReconnection: {
+        reconnectTime: 1000 /* one second */,
+        reconnectRetryTimeExponent: 1.2,
+        maxReconnectionTime: 3_600_000 /* one hour */
+      },
+
+      // snapshot stream options
+      tmpDownloadFolder: downloadsFolder,
+      // download entities retry
+      requestMaxRetries: 10,
+      requestRetryWaitTime: 5000,
+
+      // pointer chagnes stream options
+      // time between every poll to /pointer-changes
+      pointerChangesWaitTime: 5000
     }
   )
 
@@ -81,8 +105,10 @@ export async function initComponents(): Promise<AppComponents> {
     storage,
     fs,
     downloadQueue,
-    synchronizationJobManager,
+    synchronizer,
     deployer,
     sns,
+    processedSnapshotStorage,
+    snapshotStorage
   }
 }
