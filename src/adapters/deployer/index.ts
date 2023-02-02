@@ -16,11 +16,10 @@ export function createDeployerComponent(
       if (entity.entityType == "scene" || entity.entityType == "wearable" || entity.entityType == "emote") {
         const exists = await components.storage.exist(entity.entityId)
 
-        logger.info("Queuing entity", { entityId: entity.entityId, entityType: entity.entityType })
-
-        await components.downloadQueue.onSizeLessThan(1000)
-
         if (!exists) {
+          await components.downloadQueue.onSizeLessThan(1000)
+          logger.info("Queuing entity", { entityId: entity.entityId, entityType: entity.entityType })
+
           components.downloadQueue.scheduleJob(async () => {
             logger.info("Downloading entity", { entityId: entity.entityId, entityType: entity.entityType })
 
