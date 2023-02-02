@@ -10,7 +10,6 @@ import type {
   IMetricsComponent,
 } from "@well-known-components/interfaces"
 import { IContentStorageComponent, IFileSystemComponent } from "@dcl/catalyst-storage"
-import { MockedStorage } from "@dcl/catalyst-storage/dist/MockedStorage"
 import { metricDeclarations } from "./metrics"
 
 export type GlobalContext = {
@@ -43,7 +42,6 @@ export type AppComponents = BaseComponents & {
 export type TestComponents = BaseComponents & {
   // A fetch component that only hits the test server
   localFetch: IFetchComponent
-  storage: MockedStorage
 }
 
 // this type simplifies the typings of http handlers
