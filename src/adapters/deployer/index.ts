@@ -16,10 +16,14 @@ export function createDeployerComponent(
       if (entity.entityType == "scene" || entity.entityType == "wearable" || entity.entityType == "emote") {
         const exists = await components.storage.exist(entity.entityId)
 
-        if (!exists) {
-          logger.info("downloading entity", { entityId: entity.entityId, entityType: entity.entityType })
+        logger.info("Queuing entity", { entityId: entity.entityId, entityType: entity.entityType })
 
+        await components.downloadQueue.onSizeLessThan(1000)
+
+        if (!exists) {
           components.downloadQueue.scheduleJob(async () => {
+            logger.info("Downloading entity", { entityId: entity.entityId, entityType: entity.entityType })
+
             const file = await downloadEntityAndContentFiles(
               { ...components, fetcher: components.fetch },
               entity.entityId,
@@ -29,7 +33,7 @@ export function createDeployerComponent(
               10,
               1000
             )
-            logger.info("entity stored", { entityId: entity.entityId, entityType: entity.entityType })
+            logger.info("Entity stored", { entityId: entity.entityId, entityType: entity.entityType })
 
             // send sns
             if (components.sns.arn) {
@@ -43,7 +47,7 @@ export function createDeployerComponent(
                   Message: JSON.stringify(deploymentToSqs),
                 })
                 .promise()
-              logger.info("notification sent", {
+              logger.info("Notification sent", {
                 MessageId: receipt.MessageId as any,
                 SequenceNumber: receipt.SequenceNumber as any,
               })

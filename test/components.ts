@@ -6,7 +6,7 @@ import { createRunner, createLocalFetchCompoment } from "@well-known-components/
 import { main } from "../src/service"
 import { TestComponents } from "../src/types"
 import { initComponents as originalInitComponents } from "../src/components"
-import { MockedStorage } from "@dcl/catalyst-storage/dist/MockedStorage"
+import { createInMemoryStorage } from "@dcl/catalyst-storage/dist/in-memory-storage-component"
 
 /**
  * Behaves like Jest "describe" function, used to describe a test for a
@@ -25,7 +25,7 @@ async function initComponents(): Promise<TestComponents> {
 
   const { config } = components
 
-  const storage = new MockedStorage()
+  const storage = createInMemoryStorage()
 
   return {
     ...components,
