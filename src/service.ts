@@ -21,5 +21,12 @@ export async function main(program: Lifecycle.EntryPointParameters<AppComponents
   // start ports: db, listeners, synchronizations, etc
   await startComponents()
 
-  components.synchronizationJobManager.setDesiredJobs(new Set(["https://peer.decentraland.org/content"]))
+  await components.synchronizer.syncWithServers(new Set([
+    "https://peer.decentraland.org/content",
+    "https://peer-ec1.decentraland.org/content",
+    "https://peer-ec2.decentraland.org/content",
+    "https://peer-wc1.decentraland.org/content",
+    "https://peer-eu1.decentraland.org/content",
+    "https://peer-ap1.decentraland.org/content",
+  ]))
 }

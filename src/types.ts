@@ -1,6 +1,5 @@
-import { JobLifecycleManagerComponent } from "@dcl/snapshots-fetcher/dist/job-lifecycle-manager"
 import { IJobQueue } from "@dcl/snapshots-fetcher/dist/job-queue-port"
-import { IDeployerComponent } from "@dcl/snapshots-fetcher/dist/types"
+import { IDeployerComponent, SynchronizerComponent } from "@dcl/snapshots-fetcher/dist/types"
 import type { IFetchComponent } from "@well-known-components/http-server"
 import type {
   IConfigComponent,
@@ -26,7 +25,7 @@ export type BaseComponents = {
   metrics: IMetricsComponent<keyof typeof metricDeclarations>
   fs: IFileSystemComponent
   storage: IContentStorageComponent
-  synchronizationJobManager: JobLifecycleManagerComponent
+  synchronizer: SynchronizerComponent
   deployer: IDeployerComponent
   sns: SnsComponent
 }

@@ -18,12 +18,11 @@ export function createDeployerComponent(
 
         if (!exists) {
           await components.downloadQueue.onSizeLessThan(1000)
-          logger.info("Queuing entity", { entityId: entity.entityId, entityType: entity.entityType })
 
           components.downloadQueue.scheduleJob(async () => {
-            logger.info("Downloading entity", { entityId: entity.entityId, entityType: entity.entityType })
+            logger.info("Downloading entity", { entityId: entity.entityId, entityType: entity.entityType, servers: servers.join(',') })
 
-            const file = await downloadEntityAndContentFiles(
+            await downloadEntityAndContentFiles(
               { ...components, fetcher: components.fetch },
               entity.entityId,
               servers,
@@ -32,6 +31,7 @@ export function createDeployerComponent(
               10,
               1000
             )
+            
             logger.info("Entity stored", { entityId: entity.entityId, entityType: entity.entityType })
 
             // send sns
