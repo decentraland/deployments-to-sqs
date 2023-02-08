@@ -1,6 +1,6 @@
-import { JobLifecycleManagerComponent } from "@dcl/snapshots-fetcher/dist/job-lifecycle-manager"
 import { IJobQueue } from "@dcl/snapshots-fetcher/dist/job-queue-port"
 import { IDeployerComponent, IProcessedSnapshotStorageComponent, ISnapshotStorageComponent, SynchronizerComponent } from "@dcl/snapshots-fetcher/dist/types"
+
 import type { IFetchComponent } from "@well-known-components/http-server"
 import type {
   IConfigComponent,
@@ -10,7 +10,6 @@ import type {
   IMetricsComponent,
 } from "@well-known-components/interfaces"
 import { IContentStorageComponent, IFileSystemComponent } from "@dcl/catalyst-storage"
-import { MockedStorage } from "@dcl/catalyst-storage/dist/MockedStorage"
 import { metricDeclarations } from "./metrics"
 
 export type GlobalContext = {
@@ -28,8 +27,10 @@ export type BaseComponents = {
   fs: IFileSystemComponent
   storage: IContentStorageComponent
   synchronizer: SynchronizerComponent
+
   processedSnapshotStorage: IProcessedSnapshotStorageComponent
   snapshotStorage: ISnapshotStorageComponent
+
   deployer: IDeployerComponent
   sns: SnsComponent
 }
@@ -45,7 +46,6 @@ export type AppComponents = BaseComponents & {
 export type TestComponents = BaseComponents & {
   // A fetch component that only hits the test server
   localFetch: IFetchComponent
-  storage: MockedStorage
 }
 
 // this type simplifies the typings of http handlers

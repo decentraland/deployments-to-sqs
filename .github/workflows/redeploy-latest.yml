@@ -3,18 +3,32 @@ name: Manual redeploy to environment
 on:
   workflow_dispatch:
     inputs:
-      environment:
-        description: "Environment to deploy to"
+      deployment-environment:
         required: true
-        default: "dev"
         type: choice
         options:
-        - dev
-        - prd
+          - dev
+          - prd
+        default: prd
+        description: Environment
+      tag:
+        required: true
+        default: "latest"
+        type: string
+        description: "Docker tag (quay.io)"
 
 jobs:
-  manual-redeploy:
-    uses: decentraland/actions/.github/workflows/deploy-latest.yml@main
-    with:
-      service-name: deployments-to-sqs
-      deployment-environment: ${{ github.event.inputs.environment }}
+  deployment:
+    if: ${{ inputs.deployment-environment }}
+    name: "Deploy to: ${{ inputs.deployment-environment }}"
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.deployment-environment }}
+    steps:
+      - name: Trigger deployment
+        id: deploy
+        uses: decentraland/dcl-deploy-action@main
+        with:
+          dockerImage: "quay.io/decentraland/deployments-to-sqs:${{ inputs.tag }}"
+          serviceName: "deployments-to-sqs"
+          env: ${{ inputs.deployment-environment }}
+          token: ${{ secrets.GITHUB_TOKEN }}

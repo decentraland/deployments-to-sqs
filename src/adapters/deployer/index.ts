@@ -18,10 +18,12 @@ export function createDeployerComponent(
         const exists = await components.storage.exist(entity.entityId)
 
         if (!exists) {
-          logger.info("downloading entity", { entityId: entity.entityId, entityType: entity.entityType })
+          await components.downloadQueue.onSizeLessThan(1000)
 
           components.downloadQueue.scheduleJob(async () => {
-            const file = await downloadEntityAndContentFiles(
+            logger.info("Downloading entity", { entityId: entity.entityId, entityType: entity.entityType, servers: servers.join(',') })
+
+            await downloadEntityAndContentFiles(
               { ...components, fetcher: components.fetch },
               entity.entityId,
               servers,
@@ -30,7 +32,8 @@ export function createDeployerComponent(
               10,
               1000
             )
-            logger.info("entity stored", { entityId: entity.entityId, entityType: entity.entityType })
+            
+            logger.info("Entity stored", { entityId: entity.entityId, entityType: entity.entityType })
 
             // send sns
             if (components.sns.arn) {
@@ -44,7 +47,7 @@ export function createDeployerComponent(
                   Message: JSON.stringify(deploymentToSqs),
                 })
                 .promise()
-              logger.info("notification sent", {
+              logger.info("Notification sent", {
                 MessageId: receipt.MessageId as any,
                 SequenceNumber: receipt.SequenceNumber as any,
               })
