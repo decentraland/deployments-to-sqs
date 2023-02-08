@@ -1,5 +1,6 @@
 import { IJobQueue } from "@dcl/snapshots-fetcher/dist/job-queue-port"
-import { IDeployerComponent, SynchronizerComponent } from "@dcl/snapshots-fetcher/dist/types"
+import { IDeployerComponent, IProcessedSnapshotStorageComponent, ISnapshotStorageComponent, SynchronizerComponent } from "@dcl/snapshots-fetcher/dist/types"
+
 import type { IFetchComponent } from "@well-known-components/http-server"
 import type {
   IConfigComponent,
@@ -26,6 +27,10 @@ export type BaseComponents = {
   fs: IFileSystemComponent
   storage: IContentStorageComponent
   synchronizer: SynchronizerComponent
+
+  processedSnapshotStorage: IProcessedSnapshotStorageComponent
+  snapshotStorage: ISnapshotStorageComponent
+
   deployer: IDeployerComponent
   sns: SnsComponent
 }
@@ -47,11 +52,11 @@ export type TestComponents = BaseComponents & {
 export type HandlerContextWithPath<
   ComponentNames extends keyof AppComponents,
   Path extends string = any
-> = IHttpServerComponent.PathAwareContext<
-  IHttpServerComponent.DefaultContext<{
-    components: Pick<AppComponents, ComponentNames>
-  }>,
-  Path
->
+  > = IHttpServerComponent.PathAwareContext<
+    IHttpServerComponent.DefaultContext<{
+      components: Pick<AppComponents, ComponentNames>
+    }>,
+    Path
+  >
 
 export type Context<Path extends string = any> = IHttpServerComponent.PathAwareContext<GlobalContext, Path>

@@ -2,7 +2,7 @@ import { downloadEntityAndContentFiles } from "@dcl/snapshots-fetcher"
 import { IDeployerComponent } from "@dcl/snapshots-fetcher/dist/types"
 import { SNS } from "aws-sdk"
 import { AppComponents } from "../../types"
-import { DeploymentToSqs } from "@dcl/schemas/dist/misc/deployments-to-sqs";
+import { DeploymentToSqs } from "@dcl/schemas/dist/misc/deployments-to-sqs"
 
 export function createDeployerComponent(
   components: Pick<AppComponents, "logs" | "storage" | "downloadQueue" | "fetch" | "metrics" | "sns">
@@ -13,6 +13,7 @@ export function createDeployerComponent(
 
   return {
     async deployEntity(entity, servers) {
+      const markAsDeployed = entity.markAsDeployed ? entity.markAsDeployed : async () => { }
       if (entity.entityType == "scene" || entity.entityType == "wearable" || entity.entityType == "emote") {
         const exists = await components.storage.exist(entity.entityId)
 
@@ -51,10 +52,15 @@ export function createDeployerComponent(
                 SequenceNumber: receipt.SequenceNumber as any,
               })
             }
+            await markAsDeployed()
           })
+        } else {
+          await markAsDeployed()
         }
+      } else {
+        await markAsDeployed()
       }
     },
-    async onIdle() {},
+    async onIdle() { },
   }
 }

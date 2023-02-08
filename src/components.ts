@@ -123,5 +123,7 @@ export async function initComponents(): Promise<AppComponents> {
     synchronizer,
     deployer,
     sns,
+    processedSnapshotStorage,
+    snapshotStorage
   }
 }
