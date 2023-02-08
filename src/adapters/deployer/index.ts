@@ -13,6 +13,7 @@ export function createDeployerComponent(
 
   return {
     async deployEntity(entity, servers) {
+      const markAsDeployed = entity.markAsDeployed ? entity.markAsDeployed : async () => { }
       if (entity.entityType == "scene" || entity.entityType == "wearable" || entity.entityType == "emote") {
         const exists = await components.storage.exist(entity.entityId)
 
@@ -31,7 +32,7 @@ export function createDeployerComponent(
               10,
               1000
             )
-            
+
             logger.info("Entity stored", { entityId: entity.entityId, entityType: entity.entityType })
 
             // send sns
@@ -51,10 +52,15 @@ export function createDeployerComponent(
                 SequenceNumber: receipt.SequenceNumber as any,
               })
             }
+            await markAsDeployed()
           })
+        } else {
+          await markAsDeployed()
         }
+      } else {
+        await markAsDeployed()
       }
     },
-    async onIdle() {},
+    async onIdle() { },
   }
 }
