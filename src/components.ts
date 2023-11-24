@@ -1,20 +1,24 @@
-import { createDotEnvConfigComponent } from "@well-known-components/env-config-provider"
-import { createServerComponent, createStatusCheckComponent } from "@well-known-components/http-server"
-import { createLogComponent } from "@well-known-components/logger"
-import { createFetchComponent } from "./adapters/fetch"
-import { createMetricsComponent, instrumentHttpServerWithMetrics } from "@well-known-components/metrics"
-import { AppComponents, GlobalContext, SnsComponent } from "./types"
-import { metricDeclarations } from "./metrics"
-import { createJobQueue } from "@dcl/snapshots-fetcher/dist/job-queue-port"
-import { createSynchronizer, } from "@dcl/snapshots-fetcher"
-import { ISnapshotStorageComponent, IProcessedSnapshotStorageComponent } from "@dcl/snapshots-fetcher/dist/types"
-import { createDeployerComponent } from "./adapters/deployer"
-import { createAwsS3BasedFileSystemContentStorage, createFolderBasedFileSystemContentStorage, createFsComponent } from "@dcl/catalyst-storage"
-import { Readable } from "stream"
+import { createDotEnvConfigComponent } from '@well-known-components/env-config-provider'
+import { createServerComponent, createStatusCheckComponent } from '@well-known-components/http-server'
+import { createLogComponent } from '@well-known-components/logger'
+import { createFetchComponent } from './adapters/fetch'
+import { createMetricsComponent, instrumentHttpServerWithMetrics } from '@well-known-components/metrics'
+import { AppComponents, GlobalContext, SnsComponent } from './types'
+import { metricDeclarations } from './metrics'
+import { createJobQueue } from '@dcl/snapshots-fetcher/dist/job-queue-port'
+import { createSynchronizer } from '@dcl/snapshots-fetcher'
+import { ISnapshotStorageComponent, IProcessedSnapshotStorageComponent } from '@dcl/snapshots-fetcher/dist/types'
+import { createDeployerComponent } from './adapters/deployer'
+import {
+  createAwsS3BasedFileSystemContentStorage,
+  createFolderBasedFileSystemContentStorage,
+  createFsComponent
+} from '@dcl/catalyst-storage'
+import { Readable } from 'stream'
 
 // Initialize all the components of the app
 export async function initComponents(): Promise<AppComponents> {
-  const config = await createDotEnvConfigComponent({ path: [".env.default", ".env"] })
+  const config = await createDotEnvConfigComponent({ path: ['.env.default', '.env'] })
 
   const metrics = await createMetricsComponent(metricDeclarations, { config })
   const logs = await createLogComponent({ metrics })
@@ -26,10 +30,10 @@ export async function initComponents(): Promise<AppComponents> {
 
   const fs = createFsComponent()
 
-  const downloadsFolder = "content"
+  const downloadsFolder = 'content'
 
-  const bucket = await config.getString("BUCKET")
-  const snsArn = await config.getString("SNS_ARN")
+  const bucket = await config.getString('BUCKET')
+  const snsArn = await config.getString('SNS_ARN')
 
   const storage = bucket
     ? await createAwsS3BasedFileSystemContentStorage({ fs, config }, bucket)
@@ -38,11 +42,11 @@ export async function initComponents(): Promise<AppComponents> {
   const downloadQueue = createJobQueue({
     autoStart: true,
     concurrency: 5,
-    timeout: 100000,
+    timeout: 100000
   })
 
   const sns: SnsComponent = {
-    arn: snsArn,
+    arn: snsArn
   }
 
   const deployer = createDeployerComponent({ storage, downloadQueue, fetch, logs, metrics, sns })
@@ -70,7 +74,7 @@ export async function initComponents(): Promise<AppComponents> {
         }
       }
       return ret
-    },
+    }
   }
 
   const synchronizer = await createSynchronizer(
@@ -122,6 +126,6 @@ export async function initComponents(): Promise<AppComponents> {
     downloadQueue,
     synchronizer,
     deployer,
-    sns,
+    sns
   }
 }

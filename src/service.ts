@@ -1,12 +1,12 @@
-import { Lifecycle } from "@well-known-components/interfaces"
-import { setupRouter } from "./controllers/routes"
-import { AppComponents, GlobalContext, TestComponents } from "./types"
+import { Lifecycle } from '@well-known-components/interfaces'
+import { setupRouter } from './controllers/routes'
+import { AppComponents, GlobalContext, TestComponents } from './types'
 
 // this function wires the business logic (adapters & controllers) with the components (ports)
 export async function main(program: Lifecycle.EntryPointParameters<AppComponents | TestComponents>) {
   const { components, startComponents } = program
   const globalContext: GlobalContext = {
-    components,
+    components
   }
 
   // wire the HTTP router (make it automatic? TBD)
@@ -21,12 +21,14 @@ export async function main(program: Lifecycle.EntryPointParameters<AppComponents
   // start ports: db, listeners, synchronizations, etc
   await startComponents()
 
-  await components.synchronizer.syncWithServers(new Set([
-    "https://peer.decentraland.org/content",
-    "https://peer-ec1.decentraland.org/content",
-    "https://peer-ec2.decentraland.org/content",
-    "https://peer-wc1.decentraland.org/content",
-    "https://peer-eu1.decentraland.org/content",
-    "https://peer-ap1.decentraland.org/content",
-  ]))
+  await components.synchronizer.syncWithServers(
+    new Set([
+      'https://peer.decentraland.org/content',
+      'https://peer-ec1.decentraland.org/content',
+      'https://peer-ec2.decentraland.org/content',
+      'https://peer-wc1.decentraland.org/content',
+      'https://peer-eu1.decentraland.org/content',
+      'https://peer-ap1.decentraland.org/content'
+    ])
+  )
 }
