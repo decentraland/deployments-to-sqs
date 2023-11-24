@@ -6,4 +6,4 @@ on:
 
 jobs:
   build:
-    uses: decentraland/platform-actions/.github/workflows/apps.yml@main
+    uses: decentraland/platform-actions/.github/workflows/apps-build.yml@main
