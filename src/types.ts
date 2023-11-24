@@ -1,15 +1,15 @@
-import { IJobQueue } from "@dcl/snapshots-fetcher/dist/job-queue-port"
-import { IDeployerComponent, SynchronizerComponent } from "@dcl/snapshots-fetcher/dist/types"
-import type { IFetchComponent } from "@well-known-components/http-server"
+import { IJobQueue } from '@dcl/snapshots-fetcher/dist/job-queue-port'
+import { IDeployerComponent, SynchronizerComponent } from '@dcl/snapshots-fetcher/dist/types'
+import type { IFetchComponent } from '@well-known-components/http-server'
 import type {
   IConfigComponent,
   ILoggerComponent,
   IHttpServerComponent,
   IBaseComponent,
-  IMetricsComponent,
-} from "@well-known-components/interfaces"
-import { IContentStorageComponent, IFileSystemComponent } from "@dcl/catalyst-storage"
-import { metricDeclarations } from "./metrics"
+  IMetricsComponent
+} from '@well-known-components/interfaces'
+import { IContentStorageComponent, IFileSystemComponent } from '@dcl/catalyst-storage'
+import { metricDeclarations } from './metrics'
 
 export type GlobalContext = {
   components: BaseComponents
