@@ -316,14 +316,14 @@
     aws-sdk "^2.1407.0"
     destroy "^1.2.0"
 
-"@dcl/eslint-config@^1.1.12":
-  version "1.1.12"
-  resolved "https://registry.yarnpkg.com/@dcl/eslint-config/-/eslint-config-1.1.12.tgz#13ceda9fafc0aad48796f006f81c5da91c1cb6ff"
-  integrity sha512-ztefniHpe2yDlN6zgWFt/IbzS1Rpap7DuJcHYo6u7Ve1wJF1rp5k7srdqfzTvSyFSyWRrJJ6Qu1FrmfoDPrSAQ==
+"@dcl/eslint-config@^1.1.13":
+  version "1.1.13"
+  resolved "https://registry.yarnpkg.com/@dcl/eslint-config/-/eslint-config-1.1.13.tgz#cbce3473384f5bcfdf3c4db983d73f61b03c31a4"
+  integrity sha512-oixD/Fv4vRXSa1slLN2quLvWInUE+Pc335OKBpBa8d6bRtfBJj4XcaYLtFZm401JLR6TTfpZinZ+hmoyepVFYQ==
   dependencies:
     "@typescript-eslint/eslint-plugin" "^5.62.0"
     "@typescript-eslint/parser" "^5.62.0"
-    eslint "^8.48.0"
+    eslint "^8.49.0"
     eslint-config-prettier "^9.0.0"
     eslint-import-resolver-babel-module "^5.3.2"
     eslint-import-resolver-typescript "^3.6.0"
@@ -1985,7 +1985,7 @@ eslint-visitor-keys@^3.3.0, eslint-visitor-keys@^3.4.1, eslint-visitor-keys@^3.4
   resolved "https://registry.yarnpkg.com/eslint-visitor-keys/-/eslint-visitor-keys-3.4.3.tgz#0cd72fe8550e3c2eae156a96a4dddcd1c8ac5800"
   integrity sha512-wpc+LXeiyiisxPlEkUzU6svyS1frIO3Mgxj1fdy7Pm8Ygzguax2N3Fa/D/ag1WqbOprdI+uY6wMUl8/a2G+iag==
 
-eslint@^8.48.0:
+eslint@^8.49.0:
   version "8.54.0"
   resolved "https://registry.yarnpkg.com/eslint/-/eslint-8.54.0.tgz#588e0dd4388af91a2e8fa37ea64924074c783537"
   integrity sha512-NY0DfAkM8BIZDVl6PgSa1ttZbx3xHgJzSNJKYcQglem6CppHyMhRIQkBVSSMaSRnLhig3jsDbEzOjwCVt4AmmA==
