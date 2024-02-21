@@ -307,13 +307,23 @@
   resolved "https://registry.yarnpkg.com/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz#75a2e8b51cb758a7553d6804a5932d7aace75c39"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@dcl/catalyst-storage@^2.0.0", "@dcl/catalyst-storage@^2.0.3":
+"@dcl/catalyst-storage@^2.0.0":
   version "2.0.4"
   resolved "https://registry.yarnpkg.com/@dcl/catalyst-storage/-/catalyst-storage-2.0.4.tgz#eca79f335653e073cbec31d13dba5a3c1e06cf97"
   integrity sha512-LsifX7qy3b/mZAhoSrQDfgNRkhkaqCXUL3xUhODkAz4dhHs7S+kBFW4Ti5GsVHp7DWjDvLJ8RHpnVQ3b5X60fg==
   dependencies:
     "@well-known-components/interfaces" "^1.1.1"
     aws-sdk "^2.1407.0"
+    destroy "^1.2.0"
+
+"@dcl/catalyst-storage@^4.2.0":
+  version "4.2.0"
+  resolved "https://registry.yarnpkg.com/@dcl/catalyst-storage/-/catalyst-storage-4.2.0.tgz#a8a6d4f96c2a3cffa4dcc3564fa24e83bbc8ebd0"
+  integrity sha512-aE+EteZkn+AuIRAA65hceSW2rpQ7OJ5gVB55KgTcbDZnnICSirqrb9X6zXnrAGWoX3zC0J81bq2fYmmr30QvQw==
+  dependencies:
+    "@well-known-components/interfaces" "^1.1.1"
+    aws-sdk "^2.1426.0"
+    aws-sdk-client-mock "^3.0.0"
     destroy "^1.2.0"
 
 "@dcl/eslint-config@^1.1.12":
@@ -784,7 +794,7 @@
   dependencies:
     type-detect "4.0.8"
 
-"@sinonjs/fake-timers@^10.0.2":
+"@sinonjs/fake-timers@^10.0.2", "@sinonjs/fake-timers@^10.3.0":
   version "10.3.0"
   resolved "https://registry.yarnpkg.com/@sinonjs/fake-timers/-/fake-timers-10.3.0.tgz#55fdff1ecab9f354019129daf4df0dd4d923ea66"
   integrity sha512-V4BG07kuYSUkTCSBHG8G8TNhM+F19jXFWnQtzj+we8DrkpSBCee9Z3Ms8yiGer/dlmhe35/Xdgyo3/0rQKg7YA==
@@ -807,7 +817,7 @@
     lodash.get "^4.4.2"
     type-detect "^4.0.8"
 
-"@sinonjs/text-encoding@^0.7.1":
+"@sinonjs/text-encoding@^0.7.1", "@sinonjs/text-encoding@^0.7.2":
   version "0.7.2"
   resolved "https://registry.yarnpkg.com/@sinonjs/text-encoding/-/text-encoding-0.7.2.tgz#5981a8db18b56ba38ef0efb7d995b12aa7b51918"
   integrity sha512-sXXKG+uL9IrKqViTtao2Ws6dy0znu9sOaP1di/jKGW1M6VssO8vlpXCQcpZ+jisQ1tTFAC5Jo/EOzFbggBagFQ==
@@ -1009,6 +1019,13 @@
     "@types/http-errors" "*"
     "@types/mime" "*"
     "@types/node" "*"
+
+"@types/sinon@^10.0.10":
+  version "10.0.20"
+  resolved "https://registry.yarnpkg.com/@types/sinon/-/sinon-10.0.20.tgz#f1585debf4c0d99f9938f4111e5479fb74865146"
+  integrity sha512-2APKKruFNCAZgx3daAyACGzWuJ028VVCUDk6o2rw/Z4PXT0ogwdV4KUegW0MwVs0Zu59auPXbbuBJHF12Sx1Eg==
+  dependencies:
+    "@types/sinonjs__fake-timers" "*"
 
 "@types/sinon@^17.0.1":
   version "17.0.2"
@@ -1306,10 +1323,19 @@ available-typed-arrays@^1.0.5:
   resolved "https://registry.yarnpkg.com/available-typed-arrays/-/available-typed-arrays-1.0.5.tgz#92f95616501069d07d10edb2fc37d3e1c65123b7"
   integrity sha512-DMD0KiN46eipeziST1LPP/STfDU0sufISXmjSgvVsoU2tqxctQeASejWcfNtxYKqETM1UxQ8sp2OrSBWpHY6sw==
 
-aws-sdk@^2.1407.0, aws-sdk@^2.1503.0:
-  version "2.1503.0"
-  resolved "https://registry.yarnpkg.com/aws-sdk/-/aws-sdk-2.1503.0.tgz#30d6e28cc2b42c65766e1c987a6d8d2b09bfb36c"
-  integrity sha512-tDXgUp8RvVLkCI1cgDWh4zjz5V2N8K5GpCwNszqzFEHf87fSwqjFj11QZbyr+r/xktk78dpPMT0RjB1fOoJjjA==
+aws-sdk-client-mock@^3.0.0:
+  version "3.0.1"
+  resolved "https://registry.yarnpkg.com/aws-sdk-client-mock/-/aws-sdk-client-mock-3.0.1.tgz#f9ecc50ff5190fbe7286155e65ea99ad80f670ff"
+  integrity sha512-9VAzJLl8mz99KP9HjOm/93d8vznRRUTpJooPBOunRdUAnVYopCe9xmMuu7eVemu8fQ+w6rP7o5bBK1kAFkB2KQ==
+  dependencies:
+    "@types/sinon" "^10.0.10"
+    sinon "^16.1.3"
+    tslib "^2.1.0"
+
+aws-sdk@^2.1407.0, aws-sdk@^2.1426.0, aws-sdk@^2.1503.0:
+  version "2.1563.0"
+  resolved "https://registry.yarnpkg.com/aws-sdk/-/aws-sdk-2.1563.0.tgz#9f19e97111616117cd320f7aaffbe7e309d5632d"
+  integrity sha512-CuxRmrAqsTQnVeiLjiKP+3+UfzBW32TmHT2VS+7qcebvgVDaLZ4s3l0aMmusUwCciRCWOcT+20US/Pic0l9WaA==
   dependencies:
     buffer "4.9.2"
     events "1.1.1"
@@ -1320,7 +1346,7 @@ aws-sdk@^2.1407.0, aws-sdk@^2.1503.0:
     url "0.10.3"
     util "^0.12.4"
     uuid "8.0.0"
-    xml2js "0.5.0"
+    xml2js "0.6.2"
 
 babel-jest@^29.7.0:
   version "29.7.0"
@@ -3215,6 +3241,11 @@ just-extend@^4.0.2:
   resolved "https://registry.yarnpkg.com/just-extend/-/just-extend-4.2.1.tgz#ef5e589afb61e5d66b24eca749409a8939a8c744"
   integrity sha512-g3UB796vUFIY90VIv/WX3L2c8CS2MdWUww3CNrYmqza1Fg0DURc2K/O4YrnklBdQarSJ/y8JnJYDGc+1iumQjg==
 
+just-extend@^6.2.0:
+  version "6.2.0"
+  resolved "https://registry.yarnpkg.com/just-extend/-/just-extend-6.2.0.tgz#b816abfb3d67ee860482e7401564672558163947"
+  integrity sha512-cYofQu2Xpom82S6qD778jBDpwvvy39s1l/hrYij2u9AMdQcGRpaBu6kY4mVhuno5kJVi1DAz4aiphA2WI1/OAw==
+
 keyv@^4.5.3:
   version "4.5.4"
   resolved "https://registry.yarnpkg.com/keyv/-/keyv-4.5.4.tgz#a879a99e29452f942439f2a405e3af8b31d4de93"
@@ -3474,6 +3505,17 @@ negotiator@0.6.3:
   version "0.6.3"
   resolved "https://registry.yarnpkg.com/negotiator/-/negotiator-0.6.3.tgz#58e323a72fedc0d6f9cd4d31fe49f51479590ccd"
   integrity sha512-+EUsqGPLsM+j/zdChZjsnX51g4XrHFOIXwfnCVPGlQk/k5giakcKsuxCObBRu6DSm9opw/O6slWbJdghQM4bBg==
+
+nise@^5.1.4:
+  version "5.1.9"
+  resolved "https://registry.yarnpkg.com/nise/-/nise-5.1.9.tgz#0cb73b5e4499d738231a473cd89bd8afbb618139"
+  integrity sha512-qOnoujW4SV6e40dYxJOb3uvuoPHtmLzIk4TFo+j0jPJoC+5Z9xja5qH5JZobEPsa8+YYphMrOSwnrshEhG2qww==
+  dependencies:
+    "@sinonjs/commons" "^3.0.0"
+    "@sinonjs/fake-timers" "^11.2.2"
+    "@sinonjs/text-encoding" "^0.7.2"
+    just-extend "^6.2.0"
+    path-to-regexp "^6.2.1"
 
 nise@^5.1.5:
   version "5.1.5"
@@ -4034,6 +4076,18 @@ signal-exit@^3.0.3, signal-exit@^3.0.7:
   resolved "https://registry.yarnpkg.com/signal-exit/-/signal-exit-3.0.7.tgz#a9a1767f8af84155114eaabd73f99273c8f59ad9"
   integrity sha512-wnD2ZE+l+SPC/uoS0vXeE9L1+0wuaMqKlfz9AMUo38JsyLSBWSFcHR1Rri62LZc12vLr1gb3jl7iwQhgwpAbGQ==
 
+sinon@^16.1.3:
+  version "16.1.3"
+  resolved "https://registry.yarnpkg.com/sinon/-/sinon-16.1.3.tgz#b760ddafe785356e2847502657b4a0da5501fba8"
+  integrity sha512-mjnWWeyxcAf9nC0bXcPmiDut+oE8HYridTNzBbF98AYVLmWwGRp2ISEpyhYflG1ifILT+eNn3BmKUJPxjXUPlA==
+  dependencies:
+    "@sinonjs/commons" "^3.0.0"
+    "@sinonjs/fake-timers" "^10.3.0"
+    "@sinonjs/samsam" "^8.0.0"
+    diff "^5.1.0"
+    nise "^5.1.4"
+    supports-color "^7.2.0"
+
 sinon@^17.0.0:
   version "17.0.1"
   resolved "https://registry.yarnpkg.com/sinon/-/sinon-17.0.1.tgz#26b8ef719261bf8df43f925924cccc96748e407a"
@@ -4250,6 +4304,11 @@ tslib@^1.8.1:
   resolved "https://registry.yarnpkg.com/tslib/-/tslib-1.14.1.tgz#cf2d38bdc34a134bcaf1091c41f6619e2f672d00"
   integrity sha512-Xni35NKzjgMrwevysHTCArtLDpPvye8zV/0E4EyYn43P7/7qvQwPh9BGkHewbMulVntbigmcT7rdX3BNo9wRJg==
 
+tslib@^2.1.0:
+  version "2.6.2"
+  resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.6.2.tgz#703ac29425e7b37cd6fd456e92404d46d1f3e4ae"
+  integrity sha512-AEYxH93jGFPn/a2iVAwW87VuUIkR1FVUKB77NwMF7nBTDkDrrT/Hpt/IrCJ0QXhW27jTBDcf5ZY7w6RiqTMw2Q==
+
 tsutils@^3.21.0:
   version "3.21.0"
   resolved "https://registry.yarnpkg.com/tsutils/-/tsutils-3.21.0.tgz#b48717d394cea6c1e096983eed58e9d61715b623"
@@ -4454,10 +4513,10 @@ write-file-atomic@^4.0.2:
     imurmurhash "^0.1.4"
     signal-exit "^3.0.7"
 
-xml2js@0.5.0:
-  version "0.5.0"
-  resolved "https://registry.yarnpkg.com/xml2js/-/xml2js-0.5.0.tgz#d9440631fbb2ed800203fad106f2724f62c493b7"
-  integrity sha512-drPFnkQJik/O+uPKpqSgr22mpuFHqKdbS835iAQrUC73L2F5WkboIRd63ai/2Yg6I1jzifPFKH2NTK+cfglkIA==
+xml2js@0.6.2:
+  version "0.6.2"
+  resolved "https://registry.yarnpkg.com/xml2js/-/xml2js-0.6.2.tgz#dd0b630083aa09c161e25a4d0901e2b2a929b499"
+  integrity sha512-T4rieHaC1EXcES0Kxxj4JWgaUQHDk+qwHcYOCFHfiwKz7tOVPLq7Hjq9dM1WCMhylqMEfP7hMcOIChvotiZegA==
   dependencies:
     sax ">=0.6.0"
     xmlbuilder "~11.0.0"

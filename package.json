@@ -20,7 +20,7 @@
     "tabWidth": 2
   },
   "dependencies": {
-    "@dcl/catalyst-storage": "^2.0.3",
+    "@dcl/catalyst-storage": "^4.2.0",
     "@dcl/schemas": "^6.11.1",
     "@dcl/snapshots-fetcher": "^5.0.4",
     "@well-known-components/env-config-provider": "^1.1.1",
