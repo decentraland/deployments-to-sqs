@@ -22,7 +22,7 @@
   "dependencies": {
     "@dcl/catalyst-storage": "^2.0.3",
     "@dcl/schemas": "^6.11.1",
-    "@dcl/snapshots-fetcher": "^5.0.4",
+    "@dcl/snapshots-fetcher": "^9.0.3",
     "@well-known-components/env-config-provider": "^1.1.1",
     "@well-known-components/http-server": "^1.1.1",
     "@well-known-components/interfaces": "^1.2.0",
