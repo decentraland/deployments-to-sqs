@@ -18,17 +18,10 @@ export async function main(program: Lifecycle.EntryPointParameters<AppComponents
   // set the context to be passed to the handlers
   components.server.setContext(globalContext)
 
+  const contentServerUrls = await components.config.requireString('CONTENT_SERVER_URLS')
+
   // start ports: db, listeners, synchronizations, etc
   await startComponents()
 
-  await components.synchronizer.syncWithServers(
-    new Set([
-      'https://peer.decentraland.org/content',
-      'https://peer-ec1.decentraland.org/content',
-      'https://peer-ec2.decentraland.org/content',
-      'https://peer-wc1.decentraland.org/content',
-      'https://peer-eu1.decentraland.org/content',
-      'https://peer-ap1.decentraland.org/content'
-    ])
-  )
+  await components.synchronizer.syncWithServers(new Set(contentServerUrls.split(',')))
 }
