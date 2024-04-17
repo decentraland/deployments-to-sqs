@@ -27,9 +27,15 @@ async function initComponents(): Promise<TestComponents> {
 
   const storage = createInMemoryStorage()
 
+  const configMock = {
+    requireString: jest.fn().mockResolvedValue('a,b,c'),
+    getString: jest.fn().mockResolvedValue('')
+  } as any
+
   return {
     ...components,
     storage,
-    localFetch: await createLocalFetchCompoment(config)
+    localFetch: await createLocalFetchCompoment(config),
+    config: configMock
   }
 }
