@@ -27,15 +27,26 @@ export function createDeployerComponent(
               servers: servers.join(',')
             })
 
-            await downloadEntityAndContentFiles(
-              { ...components, fetcher: components.fetch },
-              entity.entityId,
-              servers,
-              new Map(),
-              'content',
-              10,
-              1000
-            )
+            try {
+              await downloadEntityAndContentFiles(
+                { ...components, fetcher: components.fetch },
+                entity.entityId,
+                servers,
+                new Map(),
+                'content',
+                10,
+                1000
+              )
+            } catch (error: any) {
+              logger.error('Error downloading entity', {
+                entityId: entity.entityId,
+                entityType: entity.entityType,
+                servers: servers.join(','),
+                error: error?.message || 'Unknown'
+              })
+
+              return
+            }
 
             logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
 
