@@ -40,12 +40,12 @@ export function createDeployerComponent(
 
               logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
 
+              const deploymentToSqs: DeploymentToSqs = {
+                entity,
+                contentServerUrls: servers
+              }
               // send sns
               if (components.sns.arn) {
-                const deploymentToSqs: DeploymentToSqs = {
-                  entity,
-                  contentServerUrls: servers
-                }
                 const receipt = await sns
                   .publish({
                     TopicArn: components.sns.arn,
@@ -53,6 +53,19 @@ export function createDeployerComponent(
                   })
                   .promise()
                 logger.info('Notification sent', {
+                  MessageId: receipt.MessageId as any,
+                  SequenceNumber: receipt.SequenceNumber as any
+                })
+              }
+
+              if (components.sns.eventArn) {
+                const receipt = await sns
+                  .publish({
+                    TopicArn: components.sns.eventArn,
+                    Message: JSON.stringify(deploymentToSqs)
+                  })
+                  .promise()
+                logger.info('Notification sent to events SNS', {
                   MessageId: receipt.MessageId as any,
                   SequenceNumber: receipt.SequenceNumber as any
                 })

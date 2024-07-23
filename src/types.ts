@@ -30,7 +30,7 @@ export type BaseComponents = {
   sns: SnsComponent
 }
 
-export type SnsComponent = { arn?: string }
+export type SnsComponent = { arn?: string; eventArn?: string }
 
 // components used in runtime
 export type AppComponents = BaseComponents & {
