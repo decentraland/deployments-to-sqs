@@ -46,19 +46,20 @@ export function createDeployerComponent(
               contentServerUrls: servers
             }
             // send sns
-            if (entity.entityType === 'scene' || entity.entityType === 'wearable' || entity.entityType === 'emote') {
-              if (components.sns.arn) {
-                const receipt = await client.send(
-                  new PublishCommand({
-                    TopicArn: components.sns.arn,
-                    Message: JSON.stringify(deploymentToSqs)
-                  })
-                )
-                logger.info('Notification sent', {
-                  MessageId: receipt.MessageId as any,
-                  SequenceNumber: receipt.SequenceNumber as any
+            if (
+              (entity.entityType === 'scene' || entity.entityType === 'wearable' || entity.entityType === 'emote') &&
+              components.sns.arn
+            ) {
+              const receipt = await client.send(
+                new PublishCommand({
+                  TopicArn: components.sns.arn,
+                  Message: JSON.stringify(deploymentToSqs)
                 })
-              }
+              )
+              logger.info('Notification sent', {
+                MessageId: receipt.MessageId as any,
+                SequenceNumber: receipt.SequenceNumber as any
+              })
             }
 
             if (components.sns.eventArn) {
