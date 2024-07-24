@@ -35,6 +35,7 @@ export async function initComponents(): Promise<AppComponents> {
   const bucket = await config.getString('BUCKET')
   const snsArn = await config.getString('SNS_ARN')
   const eventSnsArn = await config.getString('EVENTS_SNS_ARN')
+  const optionalSnsEndpoint = await config.getString('SNS_ENDPOINT')
 
   const storage = bucket
     ? await createAwsS3BasedFileSystemContentStorage({ fs, config }, bucket)
@@ -48,7 +49,8 @@ export async function initComponents(): Promise<AppComponents> {
 
   const sns: SnsComponent = {
     arn: snsArn,
-    eventArn: eventSnsArn
+    eventArn: eventSnsArn,
+    optionalSnsEndpoint
   }
 
   const deployer = createDeployerComponent({ storage, downloadQueue, fetch, logs, metrics, sns })
