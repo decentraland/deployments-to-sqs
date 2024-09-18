@@ -25,38 +25,37 @@ export function createDeployerComponent(
 
         const isSnsEventToSend = !!components.sns.eventArn
 
-        if (exists || !(isSnsEntityToSend && isSnsEventToSend)) {
+        if (exists) {
           return await markAsDeployed()
         }
 
-        await components.downloadQueue.onSizeLessThan(1000)
+        const deploymentToSqs: DeploymentToSqs = {
+          entity,
+          contentServerUrls: servers
+        }
 
-        void components.downloadQueue.scheduleJob(async () => {
-          logger.info('Downloading entity', {
-            entityId: entity.entityId,
-            entityType: entity.entityType,
-            servers: servers.join(',')
-          })
+        if (isSnsEntityToSend) {
+          await components.downloadQueue.onSizeLessThan(1000)
 
-          await downloadEntityAndContentFiles(
-            { ...components, fetcher: components.fetch },
-            entity.entityId,
-            servers,
-            new Map(),
-            'content',
-            10,
-            1000
-          )
+          void components.downloadQueue.scheduleJob(async () => {
+            logger.info('Downloading entity', {
+              entityId: entity.entityId,
+              entityType: entity.entityType,
+              servers: servers.join(',')
+            })
 
-          logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
+            await downloadEntityAndContentFiles(
+              { ...components, fetcher: components.fetch },
+              entity.entityId,
+              servers,
+              new Map(),
+              'content',
+              10,
+              1000
+            )
 
-          const deploymentToSqs: DeploymentToSqs = {
-            entity,
-            contentServerUrls: servers
-          }
-
-          // send sns
-          if (isSnsEntityToSend) {
+            logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
+            // send sns
             const receipt = await client.send(
               new PublishCommand({
                 TopicArn: components.sns.arn,
@@ -67,22 +66,23 @@ export function createDeployerComponent(
               MessageId: receipt.MessageId as any,
               SequenceNumber: receipt.SequenceNumber as any
             })
-          }
+          })
+        }
 
-          if (isSnsEventToSend) {
-            const receipt = await client.send(
-              new PublishCommand({
-                TopicArn: components.sns.eventArn,
-                Message: JSON.stringify(deploymentToSqs)
-              })
-            )
-            logger.info('Notification sent to events SNS', {
-              MessageId: receipt.MessageId as any,
-              SequenceNumber: receipt.SequenceNumber as any
+        if (isSnsEventToSend) {
+          const receipt = await client.send(
+            new PublishCommand({
+              TopicArn: components.sns.eventArn,
+              Message: JSON.stringify(deploymentToSqs)
             })
-          }
-          await markAsDeployed()
-        })
+          )
+          logger.info('Notification sent to events SNS', {
+            MessageId: receipt.MessageId as any,
+            SequenceNumber: receipt.SequenceNumber as any
+          })
+        }
+
+        await markAsDeployed()
       } catch (error: any) {
         const isNotRetryable = /status: 4\d{2}/.test(error.message)
         if (isNotRetryable) {
