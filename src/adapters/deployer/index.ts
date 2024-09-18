@@ -19,11 +19,12 @@ export function createDeployerComponent(
       try {
         const exists = await components.storage.exist(entity.entityId)
 
-        const isSnsEntityToSend = !!(
+        const isSnsEntityToSend =
           (entity.entityType === 'scene' || entity.entityType === 'wearable' || entity.entityType === 'emote') &&
-          components.sns.arn
-        )
+          !!components.sns.arn
+
         const isSnsEventToSend = !!components.sns.eventArn
+
         if (exists || !(isSnsEntityToSend && isSnsEventToSend)) {
           return await markAsDeployed()
         }
