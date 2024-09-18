@@ -50,35 +50,33 @@ export function createDeployerComponent(
 
               logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
               // send sns
-                const receipt = await client.send(
-                  new PublishCommand({
-                    TopicArn: components.sns.arn,
-                    Message: JSON.stringify(deploymentToSqs)
-                  })
-                )
-                logger.info('Notification sent', {
-                  MessageId: receipt.MessageId as any,
-                  SequenceNumber: receipt.SequenceNumber as any
-                })
-              })
-            }
-
-          if (components.sns.eventArn) {
               const receipt = await client.send(
                 new PublishCommand({
-                  TopicArn: components.sns.eventArn,
+                  TopicArn: components.sns.arn,
                   Message: JSON.stringify(deploymentToSqs)
                 })
               )
-              logger.info('Notification sent to events SNS', {
+              logger.info('Notification sent', {
                 MessageId: receipt.MessageId as any,
                 SequenceNumber: receipt.SequenceNumber as any
               })
+            })
           }
-            
-          
+
+          if (components.sns.eventArn) {
+            const receipt = await client.send(
+              new PublishCommand({
+                TopicArn: components.sns.eventArn,
+                Message: JSON.stringify(deploymentToSqs)
+              })
+            )
+            logger.info('Notification sent to events SNS', {
+              MessageId: receipt.MessageId as any,
+              SequenceNumber: receipt.SequenceNumber as any
+            })
+          }
+
           await markAsDeployed()
-          
         } else {
           await markAsDeployed()
         }
