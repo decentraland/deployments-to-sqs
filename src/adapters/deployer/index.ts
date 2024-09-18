@@ -19,66 +19,70 @@ export function createDeployerComponent(
       try {
         const exists = await components.storage.exist(entity.entityId)
 
-        if (!exists) {
-          await components.downloadQueue.onSizeLessThan(1000)
+        const isSnsEntityToSend =
+          (entity.entityType === 'scene' || entity.entityType === 'wearable' || entity.entityType === 'emote') &&
+          !!components.sns.arn
 
-          void components.downloadQueue.scheduleJob(async () => {
-            logger.info('Downloading entity', {
-              entityId: entity.entityId,
-              entityType: entity.entityType,
-              servers: servers.join(',')
-            })
+        const isSnsEventToSend = !!components.sns.eventArn
 
-            await downloadEntityAndContentFiles(
-              { ...components, fetcher: components.fetch },
-              entity.entityId,
-              servers,
-              new Map(),
-              'content',
-              10,
-              1000
-            )
-
-            logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
-
-            const deploymentToSqs: DeploymentToSqs = {
-              entity,
-              contentServerUrls: servers
-            }
-            // send sns
-            if (
-              (entity.entityType === 'scene' || entity.entityType === 'wearable' || entity.entityType === 'emote') &&
-              components.sns.arn
-            ) {
-              const receipt = await client.send(
-                new PublishCommand({
-                  TopicArn: components.sns.arn,
-                  Message: JSON.stringify(deploymentToSqs)
-                })
-              )
-              logger.info('Notification sent', {
-                MessageId: receipt.MessageId as any,
-                SequenceNumber: receipt.SequenceNumber as any
-              })
-            }
-
-            if (components.sns.eventArn) {
-              const receipt = await client.send(
-                new PublishCommand({
-                  TopicArn: components.sns.eventArn,
-                  Message: JSON.stringify(deploymentToSqs)
-                })
-              )
-              logger.info('Notification sent to events SNS', {
-                MessageId: receipt.MessageId as any,
-                SequenceNumber: receipt.SequenceNumber as any
-              })
-            }
-            await markAsDeployed()
-          })
-        } else {
-          await markAsDeployed()
+        if (exists || !(isSnsEntityToSend && isSnsEventToSend)) {
+          return await markAsDeployed()
         }
+
+        await components.downloadQueue.onSizeLessThan(1000)
+
+        void components.downloadQueue.scheduleJob(async () => {
+          logger.info('Downloading entity', {
+            entityId: entity.entityId,
+            entityType: entity.entityType,
+            servers: servers.join(',')
+          })
+
+          await downloadEntityAndContentFiles(
+            { ...components, fetcher: components.fetch },
+            entity.entityId,
+            servers,
+            new Map(),
+            'content',
+            10,
+            1000
+          )
+
+          logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
+
+          const deploymentToSqs: DeploymentToSqs = {
+            entity,
+            contentServerUrls: servers
+          }
+
+          // send sns
+          if (isSnsEntityToSend) {
+            const receipt = await client.send(
+              new PublishCommand({
+                TopicArn: components.sns.arn,
+                Message: JSON.stringify(deploymentToSqs)
+              })
+            )
+            logger.info('Notification sent', {
+              MessageId: receipt.MessageId as any,
+              SequenceNumber: receipt.SequenceNumber as any
+            })
+          }
+
+          if (isSnsEventToSend) {
+            const receipt = await client.send(
+              new PublishCommand({
+                TopicArn: components.sns.eventArn,
+                Message: JSON.stringify(deploymentToSqs)
+              })
+            )
+            logger.info('Notification sent to events SNS', {
+              MessageId: receipt.MessageId as any,
+              SequenceNumber: receipt.SequenceNumber as any
+            })
+          }
+          await markAsDeployed()
+        })
       } catch (error: any) {
         const isNotRetryable = /status: 4\d{2}/.test(error.message)
         if (isNotRetryable) {
