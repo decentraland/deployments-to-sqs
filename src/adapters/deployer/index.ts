@@ -63,8 +63,8 @@ export function createDeployerComponent(
               })
             )
             logger.info('Notification sent', {
-              MessageId: receipt.MessageId as any,
-              SequenceNumber: receipt.SequenceNumber as any
+              messageId: receipt.MessageId as any,
+              sequenceNumber: receipt.SequenceNumber as any
             })
           })
         }
@@ -77,8 +77,9 @@ export function createDeployerComponent(
             })
           )
           logger.info('Notification sent to events SNS', {
-            MessageId: receipt.MessageId as any,
-            SequenceNumber: receipt.SequenceNumber as any
+            messageId: receipt.MessageId as any,
+            sequenceNumber: receipt.SequenceNumber as any,
+            entityId: deploymentToSqs.entity.entityId
           })
         }
 
