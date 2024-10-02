@@ -59,8 +59,7 @@ export function createDeployerComponent(
             const receipt = await client.send(
               new PublishCommand({
                 TopicArn: components.sns.arn,
-                Message: JSON.stringify(deploymentToSqs),
-                MessageDeduplicationId: entity.entityId
+                Message: JSON.stringify(deploymentToSqs)
               })
             )
             logger.info('Notification sent', {
@@ -74,8 +73,7 @@ export function createDeployerComponent(
           const receipt = await client.send(
             new PublishCommand({
               TopicArn: components.sns.eventArn,
-              Message: JSON.stringify(deploymentToSqs),
-              MessageDeduplicationId: entity.entityId
+              Message: JSON.stringify(deploymentToSqs)
             })
           )
           logger.info('Notification sent to events SNS', {
