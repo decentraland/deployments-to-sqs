@@ -34,6 +34,13 @@ export function createDeployerComponent(
           contentServerUrls: servers
         }
 
+        logger.info('Forwarding entity', {
+          entityId: entity.entityId,
+          entityType: entity.entityType,
+          normalSns: isSnsEntityToSend === true ? 'should send' : 'should not send',
+          newSns: isSnsEventToSend === true ? 'should send' : 'should not send'
+        })
+
         if (isSnsEntityToSend) {
           await components.downloadQueue.onSizeLessThan(1000)
 
@@ -86,6 +93,13 @@ export function createDeployerComponent(
         await markAsDeployed()
       } catch (error: any) {
         const isNotRetryable = /status: 4\d{2}/.test(error.message)
+        logger.error('Failed to publish entity', {
+          entityId: entity.entityId,
+          entityType: entity.entityType,
+          error: error?.message,
+          stack: error?.stack
+        })
+
         if (isNotRetryable) {
           logger.error('Failed to download entity', {
             entityId: entity.entityId,
