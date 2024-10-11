@@ -25,44 +25,38 @@ export function createDeployerComponent(
 
         const isSnsEventToSend = !!components.sns.eventArn
 
-        if (exists) {
+        if (exists || !(isSnsEntityToSend && isSnsEventToSend)) {
           return await markAsDeployed()
         }
 
-        const deploymentToSqs: DeploymentToSqs = {
-          entity,
-          contentServerUrls: servers
-        }
+        await components.downloadQueue.onSizeLessThan(1000)
 
-        logger.info('Forwarding entity', {
-          entityId: entity.entityId,
-          entityType: entity.entityType,
-          normalSns: isSnsEntityToSend === true ? 'should send' : 'should not send',
-          newSns: isSnsEventToSend === true ? 'should send' : 'should not send'
-        })
+        void components.downloadQueue.scheduleJob(async () => {
+          logger.info('Downloading entity', {
+            entityId: entity.entityId,
+            entityType: entity.entityType,
+            servers: servers.join(',')
+          })
 
-        if (isSnsEntityToSend) {
-          await components.downloadQueue.onSizeLessThan(1000)
+          await downloadEntityAndContentFiles(
+            { ...components, fetcher: components.fetch },
+            entity.entityId,
+            servers,
+            new Map(),
+            'content',
+            10,
+            1000
+          )
 
-          void components.downloadQueue.scheduleJob(async () => {
-            logger.info('Downloading entity', {
-              entityId: entity.entityId,
-              entityType: entity.entityType,
-              servers: servers.join(',')
-            })
+          logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
 
-            await downloadEntityAndContentFiles(
-              { ...components, fetcher: components.fetch },
-              entity.entityId,
-              servers,
-              new Map(),
-              'content',
-              10,
-              1000
-            )
+          const deploymentToSqs: DeploymentToSqs = {
+            entity,
+            contentServerUrls: servers
+          }
 
-            logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
-            // send sns
+          // send sns
+          if (isSnsEntityToSend) {
             const receipt = await client.send(
               new PublishCommand({
                 TopicArn: components.sns.arn,
@@ -73,24 +67,22 @@ export function createDeployerComponent(
               messageId: receipt.MessageId as any,
               sequenceNumber: receipt.SequenceNumber as any
             })
-          })
-        }
+          }
 
-        if (isSnsEventToSend) {
-          const receipt = await client.send(
-            new PublishCommand({
-              TopicArn: components.sns.eventArn,
-              Message: JSON.stringify(deploymentToSqs)
+          if (isSnsEventToSend) {
+            const receipt = await client.send(
+              new PublishCommand({
+                TopicArn: components.sns.eventArn,
+                Message: JSON.stringify(deploymentToSqs)
+              })
+            )
+            logger.info('Notification sent to events SNS', {
+              MessageId: receipt.MessageId as any,
+              SequenceNumber: receipt.SequenceNumber as any
             })
-          )
-          logger.info('Notification sent to events SNS', {
-            messageId: receipt.MessageId as any,
-            sequenceNumber: receipt.SequenceNumber as any,
-            entityId: deploymentToSqs.entity.entityId
-          })
-        }
-
-        await markAsDeployed()
+          }
+          await markAsDeployed()
+        })
       } catch (error: any) {
         const isNotRetryable = /status: 4\d{2}/.test(error.message)
         logger.error('Failed to publish entity', {
