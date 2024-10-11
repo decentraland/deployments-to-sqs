@@ -1,8 +1,8 @@
-import { downloadEntityAndContentFiles } from '@dcl/snapshots-fetcher'
 import { IDeployerComponent } from '@dcl/snapshots-fetcher/dist/types'
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns'
 import { AppComponents } from '../../types'
-import { DeploymentToSqs } from '@dcl/schemas/dist/misc/deployments-to-sqs'
+import { createContentClient } from 'dcl-catalyst-client'
+import { CatalystDeploymentEvent, Entity, Events } from '@dcl/schemas'
 
 export function createDeployerComponent(
   components: Pick<AppComponents, 'logs' | 'storage' | 'downloadQueue' | 'fetch' | 'metrics' | 'sns'>
@@ -15,76 +15,60 @@ export function createDeployerComponent(
 
   return {
     async deployEntity(entity, servers) {
-      const markAsDeployed = entity.markAsDeployed ? entity.markAsDeployed : async () => {}
+      const markEntityAsDeployed = entity.markAsDeployed ? entity.markAsDeployed : async () => {}
+
       try {
-        const exists = await components.storage.exist(entity.entityId)
+        const contentClient = createContentClient({ fetcher: components.fetch, url: servers[0] })
+        const fetchedEntity: Entity | undefined = await contentClient.fetchEntityById(entity.entityId)
 
-        const isSnsEntityToSend =
-          (entity.entityType === 'scene' || entity.entityType === 'wearable' || entity.entityType === 'emote') &&
-          !!components.sns.arn
-
-        const isSnsEventToSend = !!components.sns.eventArn
-
-        if (exists) {
-          return await markAsDeployed()
+        if (!fetchedEntity) {
+          logger.info('Entity not found on Catalyst, marking it as deployed', { entityId: entity.entityId })
+          await markEntityAsDeployed()
         }
 
-        const deploymentToSqs: DeploymentToSqs = {
-          entity,
+        logger.info('Entity downloaded correctly from Catalyst', {
+          entityId: entity.entityId,
+          entityType: entity.entityType,
+          pointers: fetchedEntity.pointers.join(' - ')
+        })
+
+        const eventToPublish: CatalystDeploymentEvent = {
+          type: Events.Type.CATALYST_DEPLOYMENT,
+          subType: entity.entityType as Events.SubType.CatalystDeployment,
+          key: entity.entityId,
+          timestamp: fetchedEntity.timestamp,
+          entity: fetchedEntity,
           contentServerUrls: servers
         }
 
-        if (isSnsEntityToSend) {
-          await components.downloadQueue.onSizeLessThan(1000)
-
-          void components.downloadQueue.scheduleJob(async () => {
-            logger.info('Downloading entity', {
-              entityId: entity.entityId,
-              entityType: entity.entityType,
-              servers: servers.join(',')
-            })
-
-            await downloadEntityAndContentFiles(
-              { ...components, fetcher: components.fetch },
-              entity.entityId,
-              servers,
-              new Map(),
-              'content',
-              10,
-              1000
-            )
-
-            logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
-            // send sns
-            const receipt = await client.send(
-              new PublishCommand({
-                TopicArn: components.sns.arn,
-                Message: JSON.stringify(deploymentToSqs)
-              })
-            )
-            logger.info('Notification sent', {
-              messageId: receipt.MessageId as any,
-              sequenceNumber: receipt.SequenceNumber as any
-            })
+        const receipt = await client.send(
+          new PublishCommand({
+            TopicArn: components.sns.arn,
+            Message: JSON.stringify(eventToPublish)
           })
-        }
+        )
 
-        if (isSnsEventToSend) {
-          const receipt = await client.send(
-            new PublishCommand({
-              TopicArn: components.sns.eventArn,
-              Message: JSON.stringify(deploymentToSqs)
-            })
-          )
-          logger.info('Notification sent to events SNS', {
-            messageId: receipt.MessageId as any,
-            sequenceNumber: receipt.SequenceNumber as any,
-            entityId: deploymentToSqs.entity.entityId
-          })
-        }
+        logger.info('Notification sent', {
+          messageId: receipt.MessageId as any,
+          sequenceNumber: receipt.SequenceNumber as any,
+          entityId: entity.entityId,
+          entityPointers: fetchedEntity.pointers.join(' - ')
+        })
 
-        await markAsDeployed()
+        await markEntityAsDeployed()
       } catch (error: any) {
+        logger.error('Failure while processing entity', {
+          entityId: entity.entityId,
+          entityType: entity.entityType,
+          error: error?.message
+        })
+
+        logger.debug('Error details', {
+          entityId: entity.entityId,
+          stack: error.stack,
+          message: error.message
+        })
+
         const isNotRetryable = /status: 4\d{2}/.test(error.message)
         if (isNotRetryable) {
           logger.error('Failed to download entity', {
@@ -92,7 +76,7 @@ export function createDeployerComponent(
             entityType: entity.entityType,
             error: error?.message
           })
-          await markAsDeployed()
+          await markEntityAsDeployed()
         }
       }
     },
