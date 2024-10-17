@@ -18,6 +18,7 @@ Deployments of entities not listed here, such as profiles, are excluded. These o
 ## Foundation Catalysts
 
 As of the time of writing, the following nodes are the ones being fetched to check for any new deployments:
+
 * https://peer.decentraland.org
 * https://peer-ec1.decentraland.org
 * https://peer-ec2.decentraland.org
