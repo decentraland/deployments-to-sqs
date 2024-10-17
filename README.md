@@ -1,5 +1,7 @@
 # Deployments to SQS
 
+[![Coverage Status](https://coveralls.io/repos/github/decentraland/deployments-to-sqs/badge.svg?branch=coverage)](https://coveralls.io/github/decentraland/deployments-to-sqs?branch=coverage)
+
 This service continuously monitor for deployments that have been made on any Foundation Catalyst.
 
 The service checks for new deployments by sending GET requests to the specified API endpoint [/content/pointer-changes](https://decentraland.github.io/catalyst-api-specs/#tag/Content-Server/operation/getPointerChanges). This continuous monitoring ensures prompt identification of any deployment changes.
