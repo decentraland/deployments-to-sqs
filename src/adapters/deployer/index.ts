@@ -26,6 +26,7 @@ export function createDeployerComponent(
         const isSnsEventToSend = !!components.sns.eventArn
 
         if (exists || !(isSnsEntityToSend && isSnsEventToSend)) {
+          logger.info('Entity already stored', { entityId: entity.entityId, entityType: entity.entityType })
           return await markAsDeployed()
         }
 
