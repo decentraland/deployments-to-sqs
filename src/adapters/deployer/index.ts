@@ -25,31 +25,28 @@ export function createDeployerComponent(
 
         const isSnsEventToSend = !!components.sns.eventArn
 
-        if (exists || !(isSnsEntityToSend && isSnsEventToSend)) {
-          logger.info('Entity already stored', { entityId: entity.entityId, entityType: entity.entityType })
-          return await markAsDeployed()
-        }
-
         await components.downloadQueue.onSizeLessThan(1000)
 
         void components.downloadQueue.scheduleJob(async () => {
-          logger.info('Downloading entity', {
-            entityId: entity.entityId,
-            entityType: entity.entityType,
-            servers: servers.join(',')
-          })
+          if (!exists) {
+            logger.info('Downloading entity', {
+              entityId: entity.entityId,
+              entityType: entity.entityType,
+              servers: servers.join(',')
+            })
 
-          await downloadEntityAndContentFiles(
-            { ...components, fetcher: components.fetch },
-            entity.entityId,
-            servers,
-            new Map(),
-            'content',
-            10,
-            1000
-          )
+            await downloadEntityAndContentFiles(
+              { ...components, fetcher: components.fetch },
+              entity.entityId,
+              servers,
+              new Map(),
+              'content',
+              10,
+              1000
+            )
 
-          logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
+            logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
+          }
 
           const deploymentToSqs: DeploymentToSqs = {
             entity,
@@ -57,7 +54,7 @@ export function createDeployerComponent(
           }
 
           // send sns
-          if (isSnsEntityToSend) {
+          if (isSnsEntityToSend && !exists) {
             const receipt = await client.send(
               new PublishCommand({
                 TopicArn: components.sns.arn,
@@ -66,7 +63,8 @@ export function createDeployerComponent(
             )
             logger.info('Notification sent', {
               messageId: receipt.MessageId as any,
-              sequenceNumber: receipt.SequenceNumber as any
+              sequenceNumber: receipt.SequenceNumber as any,
+              entityId: entity.entityId
             })
           }
 
@@ -79,7 +77,8 @@ export function createDeployerComponent(
             )
             logger.info('Notification sent to events SNS', {
               MessageId: receipt.MessageId as any,
-              SequenceNumber: receipt.SequenceNumber as any
+              SequenceNumber: receipt.SequenceNumber as any,
+              entityId: entity.entityId
             })
           }
           await markAsDeployed()
