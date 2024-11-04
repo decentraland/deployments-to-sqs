@@ -9,6 +9,7 @@ on:
         options:
           - dev
           - prd
+          - stg
         default: prd
         description: Environment
       tag:
