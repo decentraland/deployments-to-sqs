@@ -72,7 +72,7 @@ export function createDeployerComponent(
 
           if (isSnsEventToSend) {
             // TODO: this should be a CatalystDeploymentEvent
-            const event = {
+            const deploymentEvent = {
               type: Events.Type.CATALYST_DEPLOYMENT,
               subType: entity.entityType as Events.SubType.CatalystDeployment,
               ...deploymentToSqs
@@ -81,7 +81,7 @@ export function createDeployerComponent(
             const receipt = await client.send(
               new PublishCommand({
                 TopicArn: components.sns.eventArn,
-                Message: JSON.stringify(event)
+                Message: JSON.stringify(deploymentEvent)
               })
             )
             logger.info('Notification sent to events SNS', {
