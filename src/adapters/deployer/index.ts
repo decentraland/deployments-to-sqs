@@ -3,6 +3,7 @@ import { IDeployerComponent } from '@dcl/snapshots-fetcher/dist/types'
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns'
 import { AppComponents } from '../../types'
 import { DeploymentToSqs } from '@dcl/schemas/dist/misc/deployments-to-sqs'
+import { Events } from '@dcl/schemas/dist/platform/events'
 
 export function createDeployerComponent(
   components: Pick<AppComponents, 'logs' | 'storage' | 'downloadQueue' | 'fetch' | 'metrics' | 'sns'>
@@ -70,10 +71,17 @@ export function createDeployerComponent(
           }
 
           if (isSnsEventToSend) {
+            // TODO: this should be a CatalystDeploymentEvent
+            const event = {
+              type: Events.Type.CATALYST_DEPLOYMENT,
+              subType: entity.entityType as Events.SubType.CatalystDeployment,
+              ...deploymentToSqs
+            } as any
+
             const receipt = await client.send(
               new PublishCommand({
                 TopicArn: components.sns.eventArn,
-                Message: JSON.stringify(deploymentToSqs)
+                Message: JSON.stringify(event)
               })
             )
             logger.info('Notification sent to events SNS', {
