@@ -22,7 +22,7 @@
   "dependencies": {
     "@aws-sdk/client-sns": "^3.616.0",
     "@dcl/catalyst-storage": "^2.0.3",
-    "@dcl/schemas": "^6.11.1",
+    "@dcl/schemas": "^15.1.2",
     "@dcl/snapshots-fetcher": "^5.0.4",
     "@well-known-components/env-config-provider": "^1.1.1",
     "@well-known-components/http-server": "^1.1.1",
