@@ -81,7 +81,11 @@ export function createDeployerComponent(
             const receipt = await client.send(
               new PublishCommand({
                 TopicArn: components.sns.eventArn,
-                Message: JSON.stringify(deploymentEvent)
+                Message: JSON.stringify(deploymentEvent),
+                MessageAttributes: {
+                  type: { DataType: 'String', StringValue: deploymentEvent.type },
+                  subType: { DataType: 'String', StringValue: deploymentEvent.subType }
+                }
               })
             )
             logger.info('Notification sent to events SNS', {
