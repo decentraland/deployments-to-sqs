@@ -39,15 +39,31 @@ export function createDeployerComponent(
             servers: servers.join(',')
           })
 
-          await downloadEntityAndContentFiles(
-            { ...components, fetcher: components.fetch },
-            entity.entityId,
-            servers,
-            new Map(),
-            'content',
-            10,
-            1000
-          )
+          try {
+            await downloadEntityAndContentFiles(
+              { ...components, fetcher: components.fetch },
+              entity.entityId,
+              servers,
+              new Map(),
+              'content',
+              10,
+              1000
+            )
+          } catch (error: any) {
+            logger.error('Failed to download entity', {
+              entityId: entity.entityId,
+              entityType: entity.entityType,
+              errorMessage: error.message
+            })
+
+            const match = error.message?.match(/status: 4\d{2}/)
+
+            if (match) {
+              await markAsDeployed()
+            }
+
+            return
+          }
 
           logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
 
@@ -66,7 +82,9 @@ export function createDeployerComponent(
             )
             logger.info('Notification sent', {
               messageId: receipt.MessageId as any,
-              sequenceNumber: receipt.SequenceNumber as any
+              sequenceNumber: receipt.SequenceNumber as any,
+              entityId: entity.entityId,
+              entityType: entity.entityType
             })
           }
 
@@ -90,7 +108,9 @@ export function createDeployerComponent(
             )
             logger.info('Notification sent to events SNS', {
               MessageId: receipt.MessageId as any,
-              SequenceNumber: receipt.SequenceNumber as any
+              SequenceNumber: receipt.SequenceNumber as any,
+              entityId: entity.entityId,
+              entityType: entity.entityType
             })
           }
           await markAsDeployed()
