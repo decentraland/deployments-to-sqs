@@ -34,7 +34,7 @@ export function createDeployerComponent(
           isSnsEventToSend: isSnsEventToSend ? 'true' : 'false'
         })
 
-        if (exists || !(isSnsEntityToSend && isSnsEventToSend)) {
+        if (exists) {
           return await markAsDeployed()
         }
 
