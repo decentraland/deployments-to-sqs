@@ -11,7 +11,7 @@ export function createDeployerComponent(
   const logger = components.logs.getLogger('downloader')
 
   const client = new SNSClient({
-    endpoint: components.sns.optionalSnsEndpoint
+    endpoint: components.sns.optionalSnsEndpoint ? components.sns.optionalSnsEndpoint : undefined
   })
 
   return {
@@ -25,6 +25,14 @@ export function createDeployerComponent(
           !!components.sns.arn
 
         const isSnsEventToSend = !!components.sns.eventArn
+
+        logger.debug('Handling entity', {
+          entityId: entity.entityId,
+          entityType: entity.entityType,
+          exists: exists ? 'true' : 'false',
+          isSnsEntityToSend: isSnsEntityToSend ? 'true' : 'false',
+          isSnsEventToSend: isSnsEventToSend ? 'true' : 'false'
+        })
 
         if (exists || !(isSnsEntityToSend && isSnsEventToSend)) {
           return await markAsDeployed()
