@@ -85,7 +85,11 @@ export function createDeployerComponent(
             const receipt = await client.send(
               new PublishCommand({
                 TopicArn: components.sns.arn,
-                Message: JSON.stringify(deploymentToSqs)
+                Message: JSON.stringify(deploymentToSqs),
+                MessageAttributes: {
+                  type: { DataType: 'String', StringValue: Events.Type.CATALYST_DEPLOYMENT },
+                  subType: { DataType: 'String', StringValue: entity.entityType as Events.SubType.CatalystDeployment }
+                }
               })
             )
             logger.info('Notification sent', {
