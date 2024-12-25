@@ -1,42 +1,31 @@
 import { downloadEntityAndContentFiles } from '@dcl/snapshots-fetcher'
 import { IDeployerComponent, TimeRange } from '@dcl/snapshots-fetcher/dist/types'
-import { PublishCommand, SNSClient } from '@aws-sdk/client-sns'
 import { AppComponents } from '../../types'
-import { DeploymentToSqs } from '@dcl/schemas/dist/misc/deployments-to-sqs'
-import { Events } from '@dcl/schemas/dist/platform/events'
 
 export function createDeployerComponent(
-  components: Pick<AppComponents, 'logs' | 'storage' | 'downloadQueue' | 'fetch' | 'metrics' | 'sns'>
+  components: Pick<
+    AppComponents,
+    'logs' | 'storage' | 'downloadQueue' | 'fetch' | 'metrics' | 'snsPublisher' | 'snsEventPublisher'
+  >
 ): IDeployerComponent {
   const logger = components.logs.getLogger('downloader')
 
-  const client = new SNSClient({
-    endpoint: components.sns.optionalSnsEndpoint ? components.sns.optionalSnsEndpoint : undefined
-  })
-
   return {
     async scheduleEntityDeployment(entity, servers) {
-      const markAsDeployed = entity.markAsDeployed ? entity.markAsDeployed : async () => {}
+      const markAsDeployed = entity.markAsDeployed || (async () => {})
+
       try {
         const exists = await components.storage.exist(entity.entityId)
 
-        const isSnsEntityToSend =
-          (entity.entityType === 'scene' || entity.entityType === 'wearable' || entity.entityType === 'emote') &&
-          !!components.sns.arn
-
-        const isSnsEventToSend = !!components.sns.eventArn
-
-        logger.debug('Handling entity', {
-          entityId: entity.entityId,
-          entityType: entity.entityType,
-          exists: exists ? 'true' : 'false',
-          isSnsEntityToSend: isSnsEntityToSend ? 'true' : 'false',
-          isSnsEventToSend: isSnsEventToSend ? 'true' : 'false'
-        })
-
         if (exists) {
+          logger.debug('Entity already stored', {
+            entityId: entity.entityId,
+            entityType: entity.entityType
+          })
           return await markAsDeployed()
         }
+
+        const shouldSendEntityToSns = ['scene', 'wearable', 'emote'].includes(entity.entityType)
 
         await components.downloadQueue.onSizeLessThan(1000)
 
@@ -75,56 +64,12 @@ export function createDeployerComponent(
 
           logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
 
-          const deploymentToSqs: DeploymentToSqs = {
-            entity,
-            contentServerUrls: servers
+          if (shouldSendEntityToSns) {
+            await components.snsPublisher.publishMessage(entity, servers)
           }
 
-          // send sns
-          if (isSnsEntityToSend) {
-            const receipt = await client.send(
-              new PublishCommand({
-                TopicArn: components.sns.arn,
-                Message: JSON.stringify(deploymentToSqs),
-                MessageAttributes: {
-                  type: { DataType: 'String', StringValue: Events.Type.CATALYST_DEPLOYMENT },
-                  subType: { DataType: 'String', StringValue: entity.entityType as Events.SubType.CatalystDeployment }
-                }
-              })
-            )
-            logger.info('Notification sent', {
-              messageId: receipt.MessageId as any,
-              sequenceNumber: receipt.SequenceNumber as any,
-              entityId: entity.entityId,
-              entityType: entity.entityType
-            })
-          }
+          await components.snsEventPublisher.publishMessage(entity, servers)
 
-          if (isSnsEventToSend) {
-            // TODO: this should be a CatalystDeploymentEvent
-            const deploymentEvent = {
-              type: Events.Type.CATALYST_DEPLOYMENT,
-              subType: entity.entityType as Events.SubType.CatalystDeployment,
-              ...deploymentToSqs
-            } as any
-
-            const receipt = await client.send(
-              new PublishCommand({
-                TopicArn: components.sns.eventArn,
-                Message: JSON.stringify(deploymentEvent),
-                MessageAttributes: {
-                  type: { DataType: 'String', StringValue: deploymentEvent.type },
-                  subType: { DataType: 'String', StringValue: deploymentEvent.subType }
-                }
-              })
-            )
-            logger.info('Notification sent to events SNS', {
-              MessageId: receipt.MessageId as any,
-              SequenceNumber: receipt.SequenceNumber as any,
-              entityId: entity.entityId,
-              entityType: entity.entityType
-            })
-          }
           await markAsDeployed()
         })
       } catch (error: any) {

@@ -3,7 +3,7 @@ import { createServerComponent, createStatusCheckComponent } from '@well-known-c
 import { createLogComponent } from '@well-known-components/logger'
 import { createFetchComponent } from './adapters/fetch'
 import { createMetricsComponent, instrumentHttpServerWithMetrics } from '@well-known-components/metrics'
-import { AppComponents, GlobalContext, SnsComponent } from './types'
+import { AppComponents, GlobalContext } from './types'
 import { metricDeclarations } from './metrics'
 import { createJobQueue } from '@dcl/snapshots-fetcher/dist/job-queue-port'
 import { createSynchronizer } from '@dcl/snapshots-fetcher'
@@ -15,6 +15,7 @@ import {
   createFsComponent
 } from '@dcl/catalyst-storage'
 import { Readable } from 'stream'
+import { createSnsPublisherComponent, SnsType } from './adapters/sns'
 
 // Initialize all the components of the app
 export async function initComponents(): Promise<AppComponents> {
@@ -33,9 +34,6 @@ export async function initComponents(): Promise<AppComponents> {
   const downloadsFolder = 'content'
 
   const bucket = await config.getString('BUCKET')
-  const snsArn = await config.getString('SNS_ARN')
-  const eventSnsArn = await config.getString('EVENTS_SNS_ARN')
-  const optionalSnsEndpoint = await config.getString('SNS_ENDPOINT')
 
   const storage = bucket
     ? await createAwsS3BasedFileSystemContentStorage({ config, logs }, bucket)
@@ -47,13 +45,18 @@ export async function initComponents(): Promise<AppComponents> {
     timeout: 100000
   })
 
-  const sns: SnsComponent = {
-    arn: snsArn,
-    eventArn: eventSnsArn,
-    optionalSnsEndpoint
-  }
+  const snsPublisher = await createSnsPublisherComponent({ config, logs }, { type: SnsType.DEPLOYMENT })
+  const snsEventPublisher = await createSnsPublisherComponent({ config, logs }, { type: SnsType.EVENT })
 
-  const deployer = createDeployerComponent({ storage, downloadQueue, fetch, logs, metrics, sns })
+  const deployer = createDeployerComponent({
+    storage,
+    downloadQueue,
+    fetch,
+    logs,
+    metrics,
+    snsPublisher,
+    snsEventPublisher
+  })
 
   const key = (hash: string) => `stored-snapshot-${hash}`
 
@@ -130,6 +133,7 @@ export async function initComponents(): Promise<AppComponents> {
     downloadQueue,
     synchronizer,
     deployer,
-    sns
+    snsPublisher,
+    snsEventPublisher
   }
 }
