@@ -1,5 +1,5 @@
 import { DeployableEntity, IDeployerComponent, TimeRange } from '@dcl/snapshots-fetcher/dist/types'
-import { AppComponents } from '../../types'
+import { AppComponents, SnsPublisherComponent } from '../../types'
 
 export function createDeployerComponent(
   components: Pick<
@@ -16,16 +16,16 @@ export function createDeployerComponent(
 ): IDeployerComponent {
   const logger = components.logs.getLogger('Deployer')
 
-  async function notifyDeployment(entity: DeployableEntity, servers: string[]) {
+  async function publishDeploymentNotifications(entity: DeployableEntity, servers: string[]) {
     const { snsPublisher, snsEventPublisher } = components
 
     const shouldSendEntityToSns = ['scene', 'wearable', 'emote'].includes(entity.entityType)
 
-    if (shouldSendEntityToSns) {
-      await snsPublisher.publishMessage(entity, servers)
-    }
+    const publishers = [shouldSendEntityToSns && snsPublisher, snsEventPublisher]
+      .filter((publisher): publisher is SnsPublisherComponent => !!publisher)
+      .map(async (publisher) => await publisher.publishMessage(entity, servers))
 
-    await snsEventPublisher.publishMessage(entity, servers)
+    await Promise.all(publishers)
   }
 
   return {
@@ -59,7 +59,7 @@ export function createDeployerComponent(
 
         void components.downloadQueue.scheduleJob(async () => {
           await components.entityDownloader.downloadEntity(entity, servers)
-          await notifyDeployment(entity, servers)
+          await publishDeploymentNotifications(entity, servers)
           await markAsDeployed()
 
           components.metrics.increment('entity_deployment_success', {
