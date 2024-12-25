@@ -38,8 +38,8 @@ export async function initComponents(): Promise<AppComponents> {
   const optionalSnsEndpoint = await config.getString('SNS_ENDPOINT')
 
   const storage = bucket
-    ? await createAwsS3BasedFileSystemContentStorage({ fs, config }, bucket)
-    : await createFolderBasedFileSystemContentStorage({ fs }, downloadsFolder)
+    ? await createAwsS3BasedFileSystemContentStorage({ config, logs }, bucket)
+    : await createFolderBasedFileSystemContentStorage({ fs, logs }, downloadsFolder)
 
   const downloadQueue = createJobQueue({
     autoStart: true,
@@ -65,12 +65,12 @@ export async function initComponents(): Promise<AppComponents> {
       snapshotStorageLogger.debug('HasSnapshot', { exists: exists ? 'true' : 'false', snapshotHash })
       return exists
     },
-    async saveProcessed(snapshotHash) {
-      snapshotStorageLogger.debug('SaveProcessed', { snapshotHash })
+    async markSnapshotAsProcessed(snapshotHash) {
+      snapshotStorageLogger.debug('MarkSnapshotAsProcessed', { snapshotHash })
       await storage.storeStream(key(snapshotHash), Readable.from([]))
     },
-    async processedFrom(snapshotHashes) {
-      snapshotStorageLogger.debug('ProcessedFrom', { cids: snapshotHashes.join(',') })
+    async filterProcessedSnapshotsFrom(snapshotHashes) {
+      snapshotStorageLogger.debug('FilterProcessedSnapshotsFrom', { cids: snapshotHashes.join(',') })
       const ret = new Set<string>()
       for (const hash of snapshotHashes) {
         if (await storage.exist(key(hash))) {
@@ -112,7 +112,7 @@ export async function initComponents(): Promise<AppComponents> {
       requestMaxRetries: 10,
       requestRetryWaitTime: 5000,
 
-      // pointer chagnes stream options
+      // pointer changes stream options
       // time between every poll to /pointer-changes
       pointerChangesWaitTime: 5000
     }

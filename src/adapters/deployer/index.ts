@@ -1,5 +1,5 @@
 import { downloadEntityAndContentFiles } from '@dcl/snapshots-fetcher'
-import { IDeployerComponent } from '@dcl/snapshots-fetcher/dist/types'
+import { IDeployerComponent, TimeRange } from '@dcl/snapshots-fetcher/dist/types'
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns'
 import { AppComponents } from '../../types'
 import { DeploymentToSqs } from '@dcl/schemas/dist/misc/deployments-to-sqs'
@@ -15,7 +15,7 @@ export function createDeployerComponent(
   })
 
   return {
-    async deployEntity(entity, servers) {
+    async scheduleEntityDeployment(entity, servers) {
       const markAsDeployed = entity.markAsDeployed ? entity.markAsDeployed : async () => {}
       try {
         const exists = await components.storage.exist(entity.entityId)
@@ -146,6 +146,7 @@ export function createDeployerComponent(
         }
       }
     },
-    async onIdle() {}
+    async onIdle() {},
+    async prepareForDeploymentsIn(_timeRanges: TimeRange[]) {}
   }
 }
