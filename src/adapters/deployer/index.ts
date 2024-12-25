@@ -30,7 +30,16 @@ export function createDeployerComponent(
 
   return {
     async scheduleEntityDeployment(entity, servers) {
+      logger.debug('Scheduling entity deployment', {
+        entityId: entity.entityId,
+        entityType: entity.entityType
+      })
+
       const markAsDeployed = entity.markAsDeployed || (async () => {})
+
+      components.metrics.increment('schedule_entity_deployment_attempt', {
+        entityType: entity.entityType
+      })
 
       try {
         const exists = await components.storage.exist(entity.entityId)
@@ -38,6 +47,9 @@ export function createDeployerComponent(
         if (exists) {
           logger.debug('Entity already stored', {
             entityId: entity.entityId,
+            entityType: entity.entityType
+          })
+          components.metrics.increment('entity_already_stored', {
             entityType: entity.entityType
           })
           return await markAsDeployed()
@@ -49,6 +61,10 @@ export function createDeployerComponent(
           await components.entityDownloader.downloadEntity(entity, servers)
           await notifyDeployment(entity, servers)
           await markAsDeployed()
+
+          components.metrics.increment('entity_deployment_success', {
+            entityType: entity.entityType
+          })
         })
       } catch (error: any) {
         const isNotRetryable = /status: 4\d{2}/.test(error.message)
@@ -68,6 +84,11 @@ export function createDeployerComponent(
 
           await markAsDeployed()
         }
+
+        components.metrics.increment('entity_deployment_failure', {
+          retryable: isNotRetryable ? 'false' : 'true',
+          entityType: entity.entityType
+        })
       }
     },
     async onIdle() {},

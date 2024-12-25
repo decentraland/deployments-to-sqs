@@ -46,10 +46,10 @@ export async function initComponents(): Promise<AppComponents> {
     timeout: 100000
   })
 
-  const snsPublisher = await createSnsPublisherComponent({ config, logs }, { type: SnsType.DEPLOYMENT })
-  const snsEventPublisher = await createSnsPublisherComponent({ config, logs }, { type: SnsType.EVENT })
+  const snsPublisher = await createSnsPublisherComponent({ config, logs, metrics }, { type: SnsType.DEPLOYMENT })
+  const snsEventPublisher = await createSnsPublisherComponent({ config, logs, metrics }, { type: SnsType.EVENT })
 
-  const entityDownloader = createEntityDownloaderComponent({ logs, storage, fetch, metrics })
+  const entityDownloader = await createEntityDownloaderComponent({ config, logs, storage, fetch, metrics })
 
   const deployer = createDeployerComponent({
     storage,

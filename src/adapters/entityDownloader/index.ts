@@ -2,10 +2,12 @@ import { downloadEntityAndContentFiles } from '@dcl/snapshots-fetcher'
 import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
 import { AppComponents, EntityDownloaderComponent } from '../../types'
 
-export function createEntityDownloaderComponent(
-  components: Pick<AppComponents, 'logs' | 'storage' | 'fetch' | 'metrics'>
-): EntityDownloaderComponent {
+export async function createEntityDownloaderComponent(
+  components: Pick<AppComponents, 'config' | 'logs' | 'storage' | 'fetch' | 'metrics'>
+): Promise<EntityDownloaderComponent> {
   const logger = components.logs.getLogger('EntityDownloader')
+  const maxRetries: number = (await components.config.getNumber('MAX_RETRIES')) || 10
+  const waitTimeBetweenRetries: number = (await components.config.getNumber('WAIT_TIME_BETWEEN_RETRIES')) || 1000
 
   return {
     async downloadEntity(entity: DeployableEntity, servers: string[]) {
@@ -24,15 +26,19 @@ export function createEntityDownloaderComponent(
           servers,
           new Map(),
           'content',
-          10,
-          1000
+          maxRetries,
+          waitTimeBetweenRetries
         )
+
+        components.metrics.increment('entity_download_success', { entityType: entity.entityType })
       } catch (error: any) {
         logger.error('Failed to download entity', {
           entityId: entity.entityId,
           entityType: entity.entityType,
           errorMessage: error.message
         })
+
+        components.metrics.increment('entity_download_failure', { entityType: entity.entityType })
 
         const isNonRetryable = error.message?.match(/status: 4\d{2}/)
 

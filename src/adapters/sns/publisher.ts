@@ -6,10 +6,10 @@ import { SnsOptions, SnsType } from './types'
 import { buildDeploymentMessage } from './utils'
 
 export async function createSnsPublisherComponent(
-  components: Pick<AppComponents, 'config' | 'logs'>,
+  components: Pick<AppComponents, 'config' | 'logs' | 'metrics'>,
   options: SnsOptions
 ): Promise<SnsPublisherComponent> {
-  const { config, logs } = components
+  const { config, logs, metrics } = components
 
   const endpoint = await config.getString('SNS_ENDPOINT')
   const logger = logs.getLogger('SnsPublisher')
@@ -52,6 +52,8 @@ export async function createSnsPublisherComponent(
           entityId: entity.entityId,
           entityType: entity.entityType
         })
+
+        metrics.increment('sns_publish_success', { type: options.type })
       } catch (error: any) {
         logger.error('Failed to publish message', {
           entityId: entity.entityId,
@@ -59,6 +61,8 @@ export async function createSnsPublisherComponent(
           error: error?.message,
           stack: error?.stack
         })
+        metrics.increment('sns_publish_failure', { type: options.type })
+
         // TODO: Is this going to change the behavior of the scheduled job?
         throw new SnsPublishError('Failed to publish message', { entity, error })
       }
