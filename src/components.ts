@@ -16,6 +16,7 @@ import {
 } from '@dcl/catalyst-storage'
 import { Readable } from 'stream'
 import { createSnsPublisherComponent, SnsType } from './adapters/sns'
+import { createEntityDownloaderComponent } from './adapters/entityDownloader'
 
 // Initialize all the components of the app
 export async function initComponents(): Promise<AppComponents> {
@@ -48,6 +49,8 @@ export async function initComponents(): Promise<AppComponents> {
   const snsPublisher = await createSnsPublisherComponent({ config, logs }, { type: SnsType.DEPLOYMENT })
   const snsEventPublisher = await createSnsPublisherComponent({ config, logs }, { type: SnsType.EVENT })
 
+  const entityDownloader = createEntityDownloaderComponent({ logs, storage, fetch, metrics })
+
   const deployer = createDeployerComponent({
     storage,
     downloadQueue,
@@ -55,7 +58,8 @@ export async function initComponents(): Promise<AppComponents> {
     logs,
     metrics,
     snsPublisher,
-    snsEventPublisher
+    snsEventPublisher,
+    entityDownloader
   })
 
   const key = (hash: string) => `stored-snapshot-${hash}`
@@ -134,6 +138,7 @@ export async function initComponents(): Promise<AppComponents> {
     synchronizer,
     deployer,
     snsPublisher,
-    snsEventPublisher
+    snsEventPublisher,
+    entityDownloader
   }
 }

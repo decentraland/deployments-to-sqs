@@ -1,14 +1,32 @@
-import { downloadEntityAndContentFiles } from '@dcl/snapshots-fetcher'
-import { IDeployerComponent, TimeRange } from '@dcl/snapshots-fetcher/dist/types'
+import { DeployableEntity, IDeployerComponent, TimeRange } from '@dcl/snapshots-fetcher/dist/types'
 import { AppComponents } from '../../types'
 
 export function createDeployerComponent(
   components: Pick<
     AppComponents,
-    'logs' | 'storage' | 'downloadQueue' | 'fetch' | 'metrics' | 'snsPublisher' | 'snsEventPublisher'
+    | 'logs'
+    | 'storage'
+    | 'downloadQueue'
+    | 'fetch'
+    | 'metrics'
+    | 'snsPublisher'
+    | 'snsEventPublisher'
+    | 'entityDownloader'
   >
 ): IDeployerComponent {
-  const logger = components.logs.getLogger('downloader')
+  const logger = components.logs.getLogger('Deployer')
+
+  async function notifyDeployment(entity: DeployableEntity, servers: string[]) {
+    const { snsPublisher, snsEventPublisher } = components
+
+    const shouldSendEntityToSns = ['scene', 'wearable', 'emote'].includes(entity.entityType)
+
+    if (shouldSendEntityToSns) {
+      await snsPublisher.publishMessage(entity, servers)
+    }
+
+    await snsEventPublisher.publishMessage(entity, servers)
+  }
 
   return {
     async scheduleEntityDeployment(entity, servers) {
@@ -25,51 +43,11 @@ export function createDeployerComponent(
           return await markAsDeployed()
         }
 
-        const shouldSendEntityToSns = ['scene', 'wearable', 'emote'].includes(entity.entityType)
-
         await components.downloadQueue.onSizeLessThan(1000)
 
         void components.downloadQueue.scheduleJob(async () => {
-          logger.info('Downloading entity', {
-            entityId: entity.entityId,
-            entityType: entity.entityType,
-            servers: servers.join(',')
-          })
-
-          try {
-            await downloadEntityAndContentFiles(
-              { ...components, fetcher: components.fetch },
-              entity.entityId,
-              servers,
-              new Map(),
-              'content',
-              10,
-              1000
-            )
-          } catch (error: any) {
-            logger.error('Failed to download entity', {
-              entityId: entity.entityId,
-              entityType: entity.entityType,
-              errorMessage: error.message
-            })
-
-            const match = error.message?.match(/status: 4\d{2}/)
-
-            if (match) {
-              await markAsDeployed()
-            }
-
-            return
-          }
-
-          logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
-
-          if (shouldSendEntityToSns) {
-            await components.snsPublisher.publishMessage(entity, servers)
-          }
-
-          await components.snsEventPublisher.publishMessage(entity, servers)
-
+          await components.entityDownloader.downloadEntity(entity, servers)
+          await notifyDeployment(entity, servers)
           await markAsDeployed()
         })
       } catch (error: any) {
@@ -87,6 +65,7 @@ export function createDeployerComponent(
             entityType: entity.entityType,
             error: error?.message
           })
+
           await markAsDeployed()
         }
       }

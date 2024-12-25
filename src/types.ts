@@ -29,10 +29,15 @@ export type BaseComponents = {
   deployer: IDeployerComponent
   snsPublisher: SnsPublisherComponent
   snsEventPublisher: SnsPublisherComponent
+  entityDownloader: EntityDownloaderComponent
 }
 
 export type SnsPublisherComponent = {
   publishMessage: (entity: DeployableEntity, contentServerUrls: string[]) => Promise<void>
+}
+
+export type EntityDownloaderComponent = {
+  downloadEntity: (entity: DeployableEntity, contentServerUrls: string[]) => Promise<void>
 }
 
 // components used in runtime
