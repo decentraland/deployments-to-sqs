@@ -1,6 +1,6 @@
 import { downloadEntityAndContentFiles } from '@dcl/snapshots-fetcher'
 import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
-import { AppComponents, EntityDownloaderComponent } from '../../types'
+import { AppComponents, EntityDownloaderComponent, EntityDownloadError } from '../../types'
 
 export async function createEntityDownloaderComponent(
   components: Pick<AppComponents, 'config' | 'logs' | 'storage' | 'fetch' | 'metrics'>
@@ -46,7 +46,10 @@ export async function createEntityDownloaderComponent(
           await markAsDeployed()
         }
 
-        return
+        throw new EntityDownloadError(error.message, {
+          entity,
+          error
+        })
       }
 
       logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })

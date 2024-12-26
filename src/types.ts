@@ -76,3 +76,16 @@ export class SnsPublishError extends Error {
     this.name = 'SnsPublishError'
   }
 }
+
+export class EntityDownloadError extends Error {
+  constructor(
+    message: string,
+    public details?: {
+      entity: DeployableEntity
+      error: Error
+    }
+  ) {
+    super(message)
+    this.name = 'EntityDownloadError'
+  }
+}

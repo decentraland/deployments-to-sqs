@@ -3,7 +3,7 @@ import { AppComponents, SnsPublisherComponent, SnsPublishError } from '../../typ
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns'
 import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
 import { SnsOptions, SnsType } from './types'
-import { buildDeploymentMessage } from './utils'
+import { buildDeploymentMessage } from '../../logic/build-deployment-message'
 
 export async function createSnsPublisherComponent(
   components: Pick<AppComponents, 'config' | 'logs' | 'metrics'>,
@@ -68,4 +68,16 @@ export async function createSnsPublisherComponent(
       }
     }
   }
+}
+
+export async function createSnsDeploymentPublisherComponent(
+  components: Pick<AppComponents, 'config' | 'logs' | 'metrics'>
+): Promise<SnsPublisherComponent> {
+  return createSnsPublisherComponent(components, { type: SnsType.DEPLOYMENT })
+}
+
+export async function createSnsEventPublisherComponent(
+  components: Pick<AppComponents, 'config' | 'logs' | 'metrics'>
+): Promise<SnsPublisherComponent> {
+  return createSnsPublisherComponent(components, { type: SnsType.EVENT })
 }

@@ -1,6 +1,6 @@
 import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
 import { DeploymentToSqs } from '@dcl/schemas/dist/misc/deployments-to-sqs'
-import { SnsType } from './types'
+import { SnsType } from '../adapters/sns/types'
 import { Events } from '@dcl/schemas/dist/platform/events'
 
 const messageBuilders: Record<SnsType, (entity: DeployableEntity, contentServerUrls: string[]) => any> = {
@@ -26,5 +26,11 @@ function buildCatalystDeploymentEventMessage(entity: DeployableEntity, contentSe
 }
 
 export function buildDeploymentMessage(type: SnsType, entity: DeployableEntity, contentServerUrls: string[]) {
-  return messageBuilders[type]?.(entity, contentServerUrls) ?? null
+  const builder = messageBuilders[type]
+
+  if (!builder) {
+    throw new Error(`Unknown SnsType: ${type}`)
+  }
+
+  return builder(entity, contentServerUrls)
 }

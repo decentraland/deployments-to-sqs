@@ -15,8 +15,8 @@ import {
   createFsComponent
 } from '@dcl/catalyst-storage'
 import { Readable } from 'stream'
-import { createSnsPublisherComponent, SnsType } from './adapters/sns'
-import { createEntityDownloaderComponent } from './adapters/entityDownloader'
+import { createEntityDownloaderComponent } from './adapters/entity-downloader'
+import { createSnsDeploymentPublisherComponent, createSnsEventPublisherComponent } from './adapters/sns'
 
 // Initialize all the components of the app
 export async function initComponents(): Promise<AppComponents> {
@@ -46,8 +46,8 @@ export async function initComponents(): Promise<AppComponents> {
     timeout: 100000
   })
 
-  const snsPublisher = await createSnsPublisherComponent({ config, logs, metrics }, { type: SnsType.DEPLOYMENT })
-  const snsEventPublisher = await createSnsPublisherComponent({ config, logs, metrics }, { type: SnsType.EVENT })
+  const snsPublisher = await createSnsDeploymentPublisherComponent({ config, logs, metrics })
+  const snsEventPublisher = await createSnsEventPublisherComponent({ config, logs, metrics })
 
   const entityDownloader = await createEntityDownloaderComponent({ config, logs, storage, fetch, metrics })
 
