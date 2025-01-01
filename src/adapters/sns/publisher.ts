@@ -5,7 +5,7 @@ import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
 import { SnsOptions, SnsType } from './types'
 import { buildDeploymentMessage } from '../../logic/build-deployment-message'
 
-export async function createSnsPublisherComponent(
+async function createSnsPublisherComponent(
   components: Pick<AppComponents, 'config' | 'logs' | 'metrics'>,
   options: SnsOptions
 ): Promise<SnsPublisherComponent> {
