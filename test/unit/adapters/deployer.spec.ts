@@ -62,7 +62,7 @@ describe('DeployerComponent', () => {
     jest.clearAllTimers()
   })
 
-  it('should called mark as deployed when the entity is already stored', async () => {
+  it('should call mark as deployed when the entity is already stored', async () => {
     storageMock.exist.mockResolvedValue(true)
 
     const deployer = createDeployerComponent(components)
