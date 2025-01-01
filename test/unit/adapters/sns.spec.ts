@@ -3,7 +3,6 @@ import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
 import {
   createSnsDeploymentPublisherComponent,
   createSnsEventPublisherComponent,
-  createSnsPublisherComponent,
   SnsType
 } from '../../../src/adapters/sns'
 import * as BuildDeploymentMessageFns from '../../../src/logic/build-deployment-message'
@@ -92,7 +91,7 @@ describe('SnsPublisherComponent', () => {
   it('should handle publish error and increment failure metric', async () => {
     mockClient.send = jest.fn().mockRejectedValueOnce(new Error('AWS error'))
 
-    const publisher = await createSnsPublisherComponent(components, { type: SnsType.DEPLOYMENT })
+    const publisher = await createSnsDeploymentPublisherComponent(components)
 
     await expect(publisher.publishMessage(mockEntity, mockServers)).rejects.toThrow(SnsPublishError)
 
