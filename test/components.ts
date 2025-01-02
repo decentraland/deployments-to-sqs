@@ -7,6 +7,7 @@ import { main } from '../src/service'
 import { TestComponents } from '../src/types'
 import { initComponents as originalInitComponents } from '../src/components'
 import { createInMemoryStorage } from '@dcl/catalyst-storage/dist/in-memory-storage-component'
+import { configMock, metricsMock } from './mocks/components'
 
 /**
  * Behaves like Jest "describe" function, used to describe a test for a
@@ -27,15 +28,11 @@ async function initComponents(): Promise<TestComponents> {
 
   const storage = createInMemoryStorage()
 
-  const configMock = {
-    requireString: jest.fn().mockResolvedValue('a,b,c'),
-    getString: jest.fn().mockResolvedValue('')
-  } as any
-
   return {
     ...components,
     storage,
     localFetch: await createLocalFetchCompoment(config),
-    config: configMock
+    config: configMock,
+    metrics: metricsMock
   }
 }

@@ -1,151 +1,117 @@
-import { downloadEntityAndContentFiles } from '@dcl/snapshots-fetcher'
-import { IDeployerComponent } from '@dcl/snapshots-fetcher/dist/types'
-import { PublishCommand, SNSClient } from '@aws-sdk/client-sns'
-import { AppComponents } from '../../types'
-import { DeploymentToSqs } from '@dcl/schemas/dist/misc/deployments-to-sqs'
-import { Events } from '@dcl/schemas/dist/platform/events'
+import { DeployableEntity, IDeployerComponent, TimeRange } from '@dcl/snapshots-fetcher/dist/types'
+import { AppComponents, EntityDownloadError, SnsPublisherComponent } from '../../types'
 
 export function createDeployerComponent(
-  components: Pick<AppComponents, 'logs' | 'storage' | 'downloadQueue' | 'fetch' | 'metrics' | 'sns'>
+  components: Pick<
+    AppComponents,
+    | 'logs'
+    | 'storage'
+    | 'downloadQueue'
+    | 'fetch'
+    | 'metrics'
+    | 'snsPublisher'
+    | 'snsEventPublisher'
+    | 'entityDownloader'
+  >
 ): IDeployerComponent {
-  const logger = components.logs.getLogger('downloader')
+  const logger = components.logs.getLogger('Deployer')
 
-  const client = new SNSClient({
-    endpoint: components.sns.optionalSnsEndpoint ? components.sns.optionalSnsEndpoint : undefined
-  })
+  async function publishDeploymentNotifications(entity: DeployableEntity, servers: string[]) {
+    const { snsPublisher, snsEventPublisher } = components
+
+    const shouldSendEntityToSns = ['scene', 'wearable', 'emote'].includes(entity.entityType)
+
+    const publishers = [shouldSendEntityToSns && snsPublisher, snsEventPublisher]
+      .filter((publisher): publisher is SnsPublisherComponent => !!publisher)
+      .map(async (publisher) => await publisher.publishMessage(entity, servers))
+
+    await Promise.all(publishers)
+  }
 
   return {
-    async deployEntity(entity, servers) {
-      const markAsDeployed = entity.markAsDeployed ? entity.markAsDeployed : async () => {}
+    async scheduleEntityDeployment(entity, servers) {
+      logger.debug('Scheduling entity deployment', {
+        entityId: entity.entityId,
+        entityType: entity.entityType
+      })
+
+      const markAsDeployed = entity.markAsDeployed || (async () => {})
+
+      components.metrics.increment('schedule_entity_deployment_attempt', {
+        entityType: entity.entityType
+      })
+
       try {
         const exists = await components.storage.exist(entity.entityId)
 
-        const isSnsEntityToSend =
-          (entity.entityType === 'scene' || entity.entityType === 'wearable' || entity.entityType === 'emote') &&
-          !!components.sns.arn
-
-        const isSnsEventToSend = !!components.sns.eventArn
-
-        logger.debug('Handling entity', {
-          entityId: entity.entityId,
-          entityType: entity.entityType,
-          exists: exists ? 'true' : 'false',
-          isSnsEntityToSend: isSnsEntityToSend ? 'true' : 'false',
-          isSnsEventToSend: isSnsEventToSend ? 'true' : 'false'
-        })
-
         if (exists) {
+          logger.debug('Entity already stored', {
+            entityId: entity.entityId,
+            entityType: entity.entityType
+          })
+          components.metrics.increment('entity_already_stored', {
+            entityType: entity.entityType
+          })
           return await markAsDeployed()
         }
 
         await components.downloadQueue.onSizeLessThan(1000)
 
         void components.downloadQueue.scheduleJob(async () => {
-          logger.info('Downloading entity', {
-            entityId: entity.entityId,
-            entityType: entity.entityType,
-            servers: servers.join(',')
-          })
-
           try {
-            await downloadEntityAndContentFiles(
-              { ...components, fetcher: components.fetch },
-              entity.entityId,
-              servers,
-              new Map(),
-              'content',
-              10,
-              1000
-            )
-          } catch (error: any) {
-            logger.error('Failed to download entity', {
-              entityId: entity.entityId,
-              entityType: entity.entityType,
-              errorMessage: error.message
+            await components.entityDownloader.downloadEntity(entity, servers)
+
+            await publishDeploymentNotifications(entity, servers)
+
+            await markAsDeployed()
+
+            components.metrics.increment('entity_deployment_success', {
+              entityType: entity.entityType
             })
-
-            const match = error.message?.match(/status: 4\d{2}/)
-
-            if (match) {
-              await markAsDeployed()
+          } catch (error: any) {
+            if (error instanceof EntityDownloadError) {
+              return
             }
 
-            return
-          }
+            const isNotRetryable = /status: 4\d{2}/.test(error.message)
 
-          logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
-
-          const deploymentToSqs: DeploymentToSqs = {
-            entity,
-            contentServerUrls: servers
-          }
-
-          // send sns
-          if (isSnsEntityToSend) {
-            const receipt = await client.send(
-              new PublishCommand({
-                TopicArn: components.sns.arn,
-                Message: JSON.stringify(deploymentToSqs),
-                MessageAttributes: {
-                  type: { DataType: 'String', StringValue: Events.Type.CATALYST_DEPLOYMENT },
-                  subType: { DataType: 'String', StringValue: entity.entityType as Events.SubType.CatalystDeployment }
-                }
-              })
-            )
-            logger.info('Notification sent', {
-              messageId: receipt.MessageId as any,
-              sequenceNumber: receipt.SequenceNumber as any,
+            logger.error('Failed to publish entity', {
               entityId: entity.entityId,
+              entityType: entity.entityType,
+              error: error?.message,
+              stack: error?.stack
+            })
+
+            components.metrics.increment('entity_deployment_failure', {
+              retryable: isNotRetryable ? 'false' : 'true',
               entityType: entity.entityType
             })
-          }
 
-          if (isSnsEventToSend) {
-            // TODO: this should be a CatalystDeploymentEvent
-            const deploymentEvent = {
-              type: Events.Type.CATALYST_DEPLOYMENT,
-              subType: entity.entityType as Events.SubType.CatalystDeployment,
-              ...deploymentToSqs
-            } as any
-
-            const receipt = await client.send(
-              new PublishCommand({
-                TopicArn: components.sns.eventArn,
-                Message: JSON.stringify(deploymentEvent),
-                MessageAttributes: {
-                  type: { DataType: 'String', StringValue: deploymentEvent.type },
-                  subType: { DataType: 'String', StringValue: deploymentEvent.subType }
-                }
+            if (isNotRetryable) {
+              logger.error('Failed to download entity', {
+                entityId: entity.entityId,
+                entityType: entity.entityType,
+                error: error?.message
               })
-            )
-            logger.info('Notification sent to events SNS', {
-              MessageId: receipt.MessageId as any,
-              SequenceNumber: receipt.SequenceNumber as any,
-              entityId: entity.entityId,
-              entityType: entity.entityType
-            })
+
+              await markAsDeployed()
+            }
           }
-          await markAsDeployed()
         })
       } catch (error: any) {
-        const isNotRetryable = /status: 4\d{2}/.test(error.message)
-        logger.error('Failed to publish entity', {
+        logger.error('Failed to schedule entity deployment', {
           entityId: entity.entityId,
           entityType: entity.entityType,
           error: error?.message,
           stack: error?.stack
         })
 
-        if (isNotRetryable) {
-          logger.error('Failed to download entity', {
-            entityId: entity.entityId,
-            entityType: entity.entityType,
-            error: error?.message
-          })
-          await markAsDeployed()
-        }
+        components.metrics.increment('entity_deployment_failure', {
+          entityType: entity.entityType
+        })
       }
     },
-    async onIdle() {}
+    async onIdle() {},
+    async prepareForDeploymentsIn(_timeRanges: TimeRange[]) {}
   }
 }

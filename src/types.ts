@@ -1,5 +1,5 @@
 import { IJobQueue } from '@dcl/snapshots-fetcher/dist/job-queue-port'
-import { IDeployerComponent, SynchronizerComponent } from '@dcl/snapshots-fetcher/dist/types'
+import { DeployableEntity, IDeployerComponent, SynchronizerComponent } from '@dcl/snapshots-fetcher/dist/types'
 import type { IFetchComponent } from '@well-known-components/http-server'
 import type {
   IConfigComponent,
@@ -27,10 +27,18 @@ export type BaseComponents = {
   storage: IContentStorageComponent
   synchronizer: SynchronizerComponent
   deployer: IDeployerComponent
-  sns: SnsComponent
+  snsPublisher: SnsPublisherComponent
+  snsEventPublisher: SnsPublisherComponent
+  entityDownloader: EntityDownloaderComponent
 }
 
-export type SnsComponent = { arn?: string; eventArn?: string; optionalSnsEndpoint?: string }
+export type SnsPublisherComponent = {
+  publishMessage: (entity: DeployableEntity, contentServerUrls: string[]) => Promise<void>
+}
+
+export type EntityDownloaderComponent = {
+  downloadEntity: (entity: DeployableEntity, contentServerUrls: string[]) => Promise<void>
+}
 
 // components used in runtime
 export type AppComponents = BaseComponents & {
@@ -55,3 +63,29 @@ export type HandlerContextWithPath<
 >
 
 export type Context<Path extends string = any> = IHttpServerComponent.PathAwareContext<GlobalContext, Path>
+
+export class SnsPublishError extends Error {
+  constructor(
+    message: string,
+    public details?: {
+      entity: DeployableEntity
+      error: Error
+    }
+  ) {
+    super(message)
+    this.name = 'SnsPublishError'
+  }
+}
+
+export class EntityDownloadError extends Error {
+  constructor(
+    message: string,
+    public details?: {
+      entity: DeployableEntity
+      error: Error
+    }
+  ) {
+    super(message)
+    this.name = 'EntityDownloadError'
+  }
+}

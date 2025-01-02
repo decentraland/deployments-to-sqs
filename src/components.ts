@@ -3,7 +3,7 @@ import { createServerComponent, createStatusCheckComponent } from '@well-known-c
 import { createLogComponent } from '@well-known-components/logger'
 import { createFetchComponent } from './adapters/fetch'
 import { createMetricsComponent, instrumentHttpServerWithMetrics } from '@well-known-components/metrics'
-import { AppComponents, GlobalContext, SnsComponent } from './types'
+import { AppComponents, GlobalContext } from './types'
 import { metricDeclarations } from './metrics'
 import { createJobQueue } from '@dcl/snapshots-fetcher/dist/job-queue-port'
 import { createSynchronizer } from '@dcl/snapshots-fetcher'
@@ -15,6 +15,8 @@ import {
   createFsComponent
 } from '@dcl/catalyst-storage'
 import { Readable } from 'stream'
+import { createEntityDownloaderComponent } from './adapters/entity-downloader'
+import { createSnsDeploymentPublisherComponent, createSnsEventPublisherComponent } from './adapters/sns'
 
 // Initialize all the components of the app
 export async function initComponents(): Promise<AppComponents> {
@@ -33,13 +35,10 @@ export async function initComponents(): Promise<AppComponents> {
   const downloadsFolder = 'content'
 
   const bucket = await config.getString('BUCKET')
-  const snsArn = await config.getString('SNS_ARN')
-  const eventSnsArn = await config.getString('EVENTS_SNS_ARN')
-  const optionalSnsEndpoint = await config.getString('SNS_ENDPOINT')
 
   const storage = bucket
-    ? await createAwsS3BasedFileSystemContentStorage({ fs, config }, bucket)
-    : await createFolderBasedFileSystemContentStorage({ fs }, downloadsFolder)
+    ? await createAwsS3BasedFileSystemContentStorage({ config, logs }, bucket)
+    : await createFolderBasedFileSystemContentStorage({ fs, logs }, downloadsFolder)
 
   const downloadQueue = createJobQueue({
     autoStart: true,
@@ -47,13 +46,21 @@ export async function initComponents(): Promise<AppComponents> {
     timeout: 100000
   })
 
-  const sns: SnsComponent = {
-    arn: snsArn,
-    eventArn: eventSnsArn,
-    optionalSnsEndpoint
-  }
+  const snsPublisher = await createSnsDeploymentPublisherComponent({ config, logs, metrics })
+  const snsEventPublisher = await createSnsEventPublisherComponent({ config, logs, metrics })
 
-  const deployer = createDeployerComponent({ storage, downloadQueue, fetch, logs, metrics, sns })
+  const entityDownloader = await createEntityDownloaderComponent({ config, logs, storage, fetch, metrics })
+
+  const deployer = createDeployerComponent({
+    storage,
+    downloadQueue,
+    fetch,
+    logs,
+    metrics,
+    snsPublisher,
+    snsEventPublisher,
+    entityDownloader
+  })
 
   const key = (hash: string) => `stored-snapshot-${hash}`
 
@@ -65,12 +72,12 @@ export async function initComponents(): Promise<AppComponents> {
       snapshotStorageLogger.debug('HasSnapshot', { exists: exists ? 'true' : 'false', snapshotHash })
       return exists
     },
-    async saveProcessed(snapshotHash) {
-      snapshotStorageLogger.debug('SaveProcessed', { snapshotHash })
+    async markSnapshotAsProcessed(snapshotHash) {
+      snapshotStorageLogger.debug('MarkSnapshotAsProcessed', { snapshotHash })
       await storage.storeStream(key(snapshotHash), Readable.from([]))
     },
-    async processedFrom(snapshotHashes) {
-      snapshotStorageLogger.debug('ProcessedFrom', { cids: snapshotHashes.join(',') })
+    async filterProcessedSnapshotsFrom(snapshotHashes) {
+      snapshotStorageLogger.debug('FilterProcessedSnapshotsFrom', { cids: snapshotHashes.join(',') })
       const ret = new Set<string>()
       for (const hash of snapshotHashes) {
         if (await storage.exist(key(hash))) {
@@ -112,7 +119,7 @@ export async function initComponents(): Promise<AppComponents> {
       requestMaxRetries: 10,
       requestRetryWaitTime: 5000,
 
-      // pointer chagnes stream options
+      // pointer changes stream options
       // time between every poll to /pointer-changes
       pointerChangesWaitTime: 5000
     }
@@ -130,6 +137,8 @@ export async function initComponents(): Promise<AppComponents> {
     downloadQueue,
     synchronizer,
     deployer,
-    sns
+    snsPublisher,
+    snsEventPublisher,
+    entityDownloader
   }
 }
