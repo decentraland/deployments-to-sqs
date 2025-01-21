@@ -1,0 +1,23 @@
+name: Publish 'latest' image
+
+on:
+  release:
+    types:
+      - "created"
+
+jobs:
+  prd-deployment:
+    uses: decentraland/platform-actions/.github/workflows/apps-docker-release.yml@main
+    with:
+      service-name: deployments-to-sqs
+      image-name: deployments-to-sqs
+      deployment-environment: prd
+    secrets: inherit
+
+  stg-deployment:
+    uses: decentraland/platform-actions/.github/workflows/apps-docker-release.yml@main
+    with:
+      service-name: deployments-to-sqs
+      image-name: deployments-to-sqs
+      deployment-environment: stg
+    secrets: inherit
