@@ -115,7 +115,8 @@ describe('SnsPublisherComponent', () => {
           TopicArn: arn,
           MessageAttributes: {
             type: { DataType: 'String', StringValue: Events.Type.CATALYST_DEPLOYMENT },
-            subType: { DataType: 'String', StringValue: mockEntity.entityType }
+            subType: { DataType: 'String', StringValue: mockEntity.entityType },
+            priority: { DataType: 'String', StringValue: '1' }
           }
         })
       })
