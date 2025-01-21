@@ -42,7 +42,7 @@ async function createSnsPublisherComponent(
             MessageAttributes: {
               type: { DataType: 'String', StringValue: Events.Type.CATALYST_DEPLOYMENT },
               subType: { DataType: 'String', StringValue: entity.entityType as Events.SubType.CatalystDeployment },
-              priority: { DataType: 'String', StringValue: 'Enabled' }
+              priority: { DataType: 'String', StringValue: '1' }
             }
           })
         )
