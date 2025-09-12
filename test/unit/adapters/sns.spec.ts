@@ -24,7 +24,7 @@ describe('SnsPublisherComponent', () => {
 
   let components: jest.Mocked<Pick<AppComponents, 'config' | 'logs' | 'metrics'>>
 
-  let mockEntity: DeployableEntity
+  let mockEntity: DeployableEntity & { metadata: any }
   let mockServers: string[]
 
   let mockClient: SNSClient
@@ -42,8 +42,12 @@ describe('SnsPublisherComponent', () => {
       markAsDeployed: jest.fn(),
       pointers: ['pointer1'],
       authChain: [],
-      entityTimestamp: Date.now()
-    }
+      entityTimestamp: Date.now(),
+      localTimestamp: Date.now(),
+      metadata: {
+        multiplayerId: null
+      }
+    } as DeployableEntity & { metadata: any }
 
     mockServers = ['server1', 'server2']
 
@@ -116,7 +120,8 @@ describe('SnsPublisherComponent', () => {
           MessageAttributes: {
             type: { DataType: 'String', StringValue: Events.Type.CATALYST_DEPLOYMENT },
             subType: { DataType: 'String', StringValue: mockEntity.entityType },
-            priority: { DataType: 'String', StringValue: '1' }
+            priority: { DataType: 'String', StringValue: '1' },
+            isMultiplayer: { DataType: 'String', StringValue: 'false' }
           }
         })
       })

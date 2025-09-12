@@ -33,14 +33,19 @@ describe('EntityDownloaderComponent', () => {
       markAsDeployed: jest.fn(),
       pointers: ['pointer1'],
       authChain: [],
-      entityTimestamp: Date.now()
+      entityTimestamp: Date.now(),
+      localTimestamp: Date.now()
     }
 
     mockServers = ['server1', 'server2']
   })
 
   it('should download entity successfully', async () => {
-    downloadEntityAndContentFilesMock.mockResolvedValueOnce(undefined)
+    downloadEntityAndContentFilesMock.mockResolvedValueOnce({
+      type: 'scene',
+      metadata: { test: 'metadata' },
+      content: []
+    })
 
     const downloader = await createEntityDownloaderComponent(components)
     await downloader.downloadEntity(mockEntity, mockServers)
