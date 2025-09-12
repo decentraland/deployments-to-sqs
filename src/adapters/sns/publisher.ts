@@ -35,7 +35,7 @@ async function createSnsPublisherComponent(
           entityType: entity.entityType
         })
 
-        const isMultiplayerScene = entity.entityType === 'scene' && !!entity.metadata.multiplayerId
+        const isMultiplayerScene = entity.entityType === 'scene' && !!entity.metadata?.multiplayerId
 
         const receipt = await client.send(
           new PublishCommand({
