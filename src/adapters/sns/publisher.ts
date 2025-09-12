@@ -26,7 +26,7 @@ async function createSnsPublisherComponent(
   const arn = await config.requireString(arnConfigName[options.type])
 
   return {
-    async publishMessage(entity: DeployableEntity, contentServerUrls: string[]) {
+    async publishMessage(entity: DeployableEntity & { metadata: any }, contentServerUrls: string[]) {
       try {
         const message = buildDeploymentMessage(options.type, entity, contentServerUrls)
 
@@ -35,6 +35,8 @@ async function createSnsPublisherComponent(
           entityType: entity.entityType
         })
 
+        const isMultiplayerScene = entity.entityType === 'scene' && !!entity.metadata.multiplayerId
+
         const receipt = await client.send(
           new PublishCommand({
             TopicArn: arn,
@@ -42,7 +44,8 @@ async function createSnsPublisherComponent(
             MessageAttributes: {
               type: { DataType: 'String', StringValue: Events.Type.CATALYST_DEPLOYMENT },
               subType: { DataType: 'String', StringValue: entity.entityType as Events.SubType.CatalystDeployment },
-              priority: { DataType: 'String', StringValue: '1' }
+              priority: { DataType: 'String', StringValue: '1' },
+              isMultiplayer: { DataType: 'String', StringValue: isMultiplayerScene ? 'true' : 'false' }
             }
           })
         )
@@ -51,7 +54,8 @@ async function createSnsPublisherComponent(
           messageId: receipt.MessageId as any,
           sequenceNumber: receipt.SequenceNumber as any,
           entityId: entity.entityId,
-          entityType: entity.entityType
+          entityType: entity.entityType,
+          isMultiplayerScene: isMultiplayerScene ? 'true' : 'false'
         })
 
         metrics.increment('sns_publish_success', { type: options.type })
