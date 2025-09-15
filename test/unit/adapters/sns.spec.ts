@@ -24,7 +24,7 @@ describe('SnsPublisherComponent', () => {
 
   let components: jest.Mocked<Pick<AppComponents, 'config' | 'logs' | 'metrics'>>
 
-  let mockEntity: DeployableEntity
+  let mockEntity: DeployableEntity & { metadata: any }
   let mockServers: string[]
 
   let mockClient: SNSClient
@@ -42,8 +42,12 @@ describe('SnsPublisherComponent', () => {
       markAsDeployed: jest.fn(),
       pointers: ['pointer1'],
       authChain: [],
-      entityTimestamp: Date.now()
-    }
+      entityTimestamp: Date.now(),
+      localTimestamp: Date.now(),
+      metadata: {
+        multiplayerId: null
+      }
+    } as DeployableEntity & { metadata: any }
 
     mockServers = ['server1', 'server2']
 
@@ -99,6 +103,78 @@ describe('SnsPublisherComponent', () => {
     expect(metricsMock.increment).toHaveBeenCalledWith('sns_publish_failure', { type: SnsType.DEPLOYMENT })
   })
 
+  describe('isMultiplayer attribute', () => {
+    it('should set isMultiplayer to true for scenes with multiplayerId', async () => {
+      const multiplayerEntity = {
+        ...mockEntity,
+        metadata: { multiplayerId: 'mp-room-123' }
+      }
+
+      mockClient.send = jest.fn().mockResolvedValueOnce({ MessageId: 'message-id' })
+      mockArnConfigImplementation('SNS_ARN', 'test-arn')
+
+      const publisher = await createSnsDeploymentPublisherComponent(components)
+      await publisher.publishMessage(multiplayerEntity, mockServers)
+
+      expect(mockClient.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: expect.objectContaining({
+            MessageAttributes: expect.objectContaining({
+              isMultiplayer: { DataType: 'String', StringValue: 'true' }
+            })
+          })
+        })
+      )
+    })
+
+    it('should set isMultiplayer to false for non-scene entities', async () => {
+      const profileEntity = {
+        ...mockEntity,
+        entityType: 'profile',
+        metadata: { anyData: 'value' }
+      }
+
+      mockClient.send = jest.fn().mockResolvedValueOnce({ MessageId: 'message-id' })
+      mockArnConfigImplementation('SNS_ARN', 'test-arn')
+
+      const publisher = await createSnsDeploymentPublisherComponent(components)
+      await publisher.publishMessage(profileEntity, mockServers)
+
+      expect(mockClient.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: expect.objectContaining({
+            MessageAttributes: expect.objectContaining({
+              isMultiplayer: { DataType: 'String', StringValue: 'false' }
+            })
+          })
+        })
+      )
+    })
+
+    it('should set isMultiplayer to false for scenes without multiplayerId', async () => {
+      const singlePlayerEntity = {
+        ...mockEntity,
+        metadata: { someOtherData: 'value' }
+      }
+
+      mockClient.send = jest.fn().mockResolvedValueOnce({ MessageId: 'message-id' })
+      mockArnConfigImplementation('EVENTS_SNS_ARN', 'test-arn')
+
+      const publisher = await createSnsEventPublisherComponent(components)
+      await publisher.publishMessage(singlePlayerEntity, mockServers)
+
+      expect(mockClient.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: expect.objectContaining({
+            MessageAttributes: expect.objectContaining({
+              isMultiplayer: { DataType: 'String', StringValue: 'false' }
+            })
+          })
+        })
+      )
+    })
+  })
+
   // Helper Functions
   function mockArnConfigImplementation(expectedKey: string, arn: string) {
     configMock.requireString.mockImplementationOnce((key: string) => {
@@ -116,7 +192,8 @@ describe('SnsPublisherComponent', () => {
           MessageAttributes: {
             type: { DataType: 'String', StringValue: Events.Type.CATALYST_DEPLOYMENT },
             subType: { DataType: 'String', StringValue: mockEntity.entityType },
-            priority: { DataType: 'String', StringValue: '1' }
+            priority: { DataType: 'String', StringValue: '1' },
+            isMultiplayer: { DataType: 'String', StringValue: 'false' }
           }
         })
       })

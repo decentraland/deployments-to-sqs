@@ -16,7 +16,7 @@ export function createDeployerComponent(
 ): IDeployerComponent {
   const logger = components.logs.getLogger('Deployer')
 
-  async function publishDeploymentNotifications(entity: DeployableEntity, servers: string[]) {
+  async function publishDeploymentNotifications(entity: DeployableEntity & { metadata: any }, servers: string[]) {
     const { snsPublisher, snsEventPublisher } = components
 
     const shouldSendEntityToSns = ['scene', 'wearable', 'emote'].includes(entity.entityType)
@@ -59,9 +59,9 @@ export function createDeployerComponent(
 
         void components.downloadQueue.scheduleJob(async () => {
           try {
-            await components.entityDownloader.downloadEntity(entity, servers)
+            const metadata = await components.entityDownloader.downloadEntity(entity, servers)
 
-            await publishDeploymentNotifications(entity, servers)
+            await publishDeploymentNotifications({ ...entity, metadata }, servers)
 
             await markAsDeployed()
 

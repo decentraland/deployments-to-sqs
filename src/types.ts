@@ -33,7 +33,7 @@ export type BaseComponents = {
 }
 
 export type SnsPublisherComponent = {
-  publishMessage: (entity: DeployableEntity, contentServerUrls: string[]) => Promise<void>
+  publishMessage: (entity: DeployableEntity & { metadata: any }, contentServerUrls: string[]) => Promise<void>
 }
 
 export type EntityDownloaderComponent = {
