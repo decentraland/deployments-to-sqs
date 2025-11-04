@@ -27,3 +27,7 @@ As of the time of writing, the following nodes are the ones being fetched to che
 * https://peer-wc1.decentraland.org
 * https://peer-eu1.decentraland.org
 * https://peer-ap1.decentraland.org
+
+## AI Agent Context
+
+For detailed AI Agent context, see [docs/ai-agent-context.md](docs/ai-agent-context.md).
