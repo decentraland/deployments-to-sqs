@@ -28,7 +28,7 @@ As of the time of writing, the following nodes are the ones being fetched to che
 * https://peer-eu1.decentraland.org
 * https://peer-ap1.decentraland.org
 
-## 🤖 AI Agent Context
+## AI Agent Context
 
 **Service Purpose:** Monitors Catalyst content servers for new entity deployments and publishes deployment events to AWS SNS. Acts as the event source for downstream optimization services (Asset Bundle Converter, LODs Generator) that process wearables, emotes, and scenes.
 
