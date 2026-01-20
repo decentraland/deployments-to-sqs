@@ -15,7 +15,7 @@ async function createSnsPublisherComponent(
   const logger = logs.getLogger('SnsPublisher')
 
   const client = new SNSClient({
-    endpoint: endpoint ?? undefined
+    endpoint: endpoint ? endpoint : undefined
   })
 
   const arnConfigName: Record<SnsType, string> = {
