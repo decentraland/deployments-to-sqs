@@ -112,12 +112,33 @@ export function createResilientContentStorage(
           const source = await item.asStream()
           const tmpPath = await stageToDisk(fileId, source)
 
-          // `fs.ReadStream` always emits 'close' after 'end' or 'error',
-          // so a single listener is enough to cover both paths.
           const readStream = createReadStream(tmpPath)
-          readStream.once('close', () => {
-            unlink(tmpPath).catch(() => {})
-          })
+
+          // `fs.ReadStream` emits 'close' after both 'end' and 'error', so
+          // 'close' alone is enough to cover the common paths. Listening on
+          // 'error' too is belt-and-suspenders in case future Node changes
+          // alter the ordering. `cleaned` guarantees the unlink runs once,
+          // so the second listener doesn't produce spurious ENOENT noise.
+          //
+          // Remaining assumption: the caller eventually reads or destroys
+          // the stream. If it's awaited and then dropped on the floor, the
+          // fd is never opened, 'close' never fires, and the temp file
+          // persists until the task restarts (Fargate wipes `/tmp` on
+          // restart). All current in-repo consumers iterate the stream or
+          // call `.destroy()` in a `finally` block.
+          let cleaned = false
+          const cleanup = (): void => {
+            if (cleaned) {
+              return
+            }
+            cleaned = true
+            unlink(tmpPath).catch((err: unknown) => {
+              const message = err instanceof Error ? err.message : String(err)
+              logger.warn('Failed to unlink staged content file', { tmpPath, error: message })
+            })
+          }
+          readStream.once('close', cleanup)
+          readStream.once('error', cleanup)
           return readStream
         }
       }
