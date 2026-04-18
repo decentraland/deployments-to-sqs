@@ -1,9 +1,12 @@
 import { ContentItem, IContentStorageComponent } from '@dcl/catalyst-storage'
 import { readdirSync } from 'fs'
 import { tmpdir } from 'os'
-import { Readable } from 'stream'
+import { Readable, Writable } from 'stream'
 import { createResilientContentStorage } from '../../../src/adapters/storage'
 import { logsMock, storageMock } from '../../mocks/components'
+
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const fs = require('fs') as typeof import('fs')
 
 const STAGING_PREFIX = 'content-stage-'
 
@@ -25,12 +28,25 @@ describe('ResilientContentStorage', () => {
   let innerStorage: jest.Mocked<IContentStorageComponent>
 
   beforeEach(() => {
+    // `resetAllMocks` in afterEach also drops implementations set at module
+    // load time (e.g. `logsMock.getLogger`'s return value), so we re-seed
+    // the logger mock on every test.
+    logsMock.getLogger.mockReturnValue({
+      log: jest.fn(),
+      error: jest.fn(),
+      debug: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn()
+    })
     innerStorage = storageMock
     storage = createResilientContentStorage({ logs: logsMock }, innerStorage)
   })
 
   afterEach(async () => {
-    jest.clearAllMocks()
+    // `resetAllMocks` (vs `clearAllMocks`) also drops queued
+    // `mockResolvedValueOnce` implementations, so no state leaks into
+    // subsequent tests that share `storageMock`.
+    jest.resetAllMocks()
     await waitForNoStagingFiles()
   })
 
@@ -81,6 +97,40 @@ describe('ResilientContentStorage', () => {
 
         await waitForNoStagingFiles()
         expect(listStagingFiles().length).toBe(stagingFilesBefore)
+      })
+    })
+
+    describe('and the local write stream fails (e.g. disk full)', () => {
+      let innerItem: ContentItem
+      let sourceStream: Readable
+      let createWriteStreamSpy: jest.SpyInstance
+
+      beforeEach(() => {
+        sourceStream = Readable.from(Buffer.from('some content'))
+
+        const failingWrite = new Writable({
+          write(_chunk, _encoding, callback) {
+            callback(Object.assign(new Error('disk full'), { code: 'ENOSPC' }))
+          }
+        })
+        createWriteStreamSpy = jest.spyOn(fs, 'createWriteStream').mockReturnValueOnce(failingWrite as any)
+
+        innerItem = {
+          encoding: null,
+          size: 12,
+          asStream: jest.fn().mockResolvedValue(sourceStream),
+          asRawStream: jest.fn()
+        }
+        innerStorage.retrieve.mockResolvedValueOnce(innerItem)
+      })
+
+      afterEach(() => {
+        createWriteStreamSpy.mockRestore()
+      })
+
+      it('should reject asStream with the write-side error', async () => {
+        const item = await storage.retrieve('disk-full')
+        await expect(item!.asStream()).rejects.toThrow('disk full')
       })
     })
 
