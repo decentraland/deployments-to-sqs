@@ -17,6 +17,7 @@ import {
 import { Readable } from 'stream'
 import { createEntityDownloaderComponent } from './adapters/entity-downloader'
 import { createSnsDeploymentPublisherComponent, createSnsEventPublisherComponent } from './adapters/sns'
+import { createResilientContentStorage } from './adapters/storage'
 
 // Initialize all the components of the app
 export async function initComponents(): Promise<AppComponents> {
@@ -36,9 +37,11 @@ export async function initComponents(): Promise<AppComponents> {
 
   const bucket = await config.getString('BUCKET')
 
-  const storage = bucket
+  const rawStorage = bucket
     ? await createAwsS3BasedFileSystemContentStorage({ config, logs }, bucket)
     : await createFolderBasedFileSystemContentStorage({ fs, logs }, downloadsFolder)
+
+  const storage = createResilientContentStorage({ logs }, rawStorage)
 
   const downloadQueue = createJobQueue({
     autoStart: true,
