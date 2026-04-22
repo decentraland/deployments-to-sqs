@@ -213,21 +213,24 @@ describe('DeployerComponent', () => {
       expect(entityDownloaderMock.downloadEntity).toHaveBeenCalledWith(boundaryEntity, mockServers)
     })
 
-    it.each(['', '0', 'abc', '-3600'])('should process all entities when config is "%s" (filter disabled)', async (configValue) => {
-      configMock.getString.mockResolvedValue(configValue)
-      storageMock.exist.mockResolvedValue(false)
-      entityDownloaderMock.downloadEntity.mockResolvedValue()
-      snsPublisherMock.publishMessage.mockResolvedValue()
-      const oldTimestamp = Date.now() - 10 * 365 * 24 * 3600 * 1000
-      const oldEntity = { ...mockEntity, entityTimestamp: oldTimestamp }
+    it.each(['', '0', 'abc', '-3600'])(
+      'should process all entities when config is "%s" (filter disabled)',
+      async (configValue) => {
+        configMock.getString.mockResolvedValue(configValue)
+        storageMock.exist.mockResolvedValue(false)
+        entityDownloaderMock.downloadEntity.mockResolvedValue()
+        snsPublisherMock.publishMessage.mockResolvedValue()
+        const oldTimestamp = Date.now() - 10 * 365 * 24 * 3600 * 1000
+        const oldEntity = { ...mockEntity, entityTimestamp: oldTimestamp }
 
-      const deployer = await createDeployerComponent(components)
-      await deployer.scheduleEntityDeployment(oldEntity, mockServers)
+        const deployer = await createDeployerComponent(components)
+        await deployer.scheduleEntityDeployment(oldEntity, mockServers)
 
-      await jest.advanceTimersByTimeAsync(0)
+        await jest.advanceTimersByTimeAsync(0)
 
-      expect(metricsMock.increment).not.toHaveBeenCalledWith('entity_skipped_old', expect.anything())
-      expect(entityDownloaderMock.downloadEntity).toHaveBeenCalledWith(oldEntity, mockServers)
-    })
+        expect(metricsMock.increment).not.toHaveBeenCalledWith('entity_skipped_old', expect.anything())
+        expect(entityDownloaderMock.downloadEntity).toHaveBeenCalledWith(oldEntity, mockServers)
+      }
+    )
   })
 })
