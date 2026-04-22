@@ -51,6 +51,11 @@ export const metricDeclarations = {
     help: 'Count failed entity deployments',
     type: IMetricsComponent.CounterType,
     labelNames: ['entityType', 'retryable']
+  },
+  entity_skipped_old: {
+    help: 'Count entities skipped because they are older than the configured max age',
+    type: IMetricsComponent.CounterType,
+    labelNames: ['entityType']
   }
 }
 

@@ -54,7 +54,8 @@ export async function initComponents(): Promise<AppComponents> {
 
   const entityDownloader = await createEntityDownloaderComponent({ config, logs, storage, fetch, metrics })
 
-  const deployer = createDeployerComponent({
+  const deployer = await createDeployerComponent({
+    config,
     storage,
     downloadQueue,
     fetch,
