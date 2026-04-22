@@ -195,8 +195,26 @@ describe('DeployerComponent', () => {
       expect(mockEntity.markAsDeployed).toHaveBeenCalled()
     })
 
-    it('should process all entities when the age filter is disabled', async () => {
-      configMock.getString.mockResolvedValue('')
+    it('should not skip an entity aged exactly at the threshold', async () => {
+      const maxAgeInSeconds = 3600
+      configMock.getString.mockResolvedValue(String(maxAgeInSeconds))
+      storageMock.exist.mockResolvedValue(false)
+      entityDownloaderMock.downloadEntity.mockResolvedValue()
+      snsPublisherMock.publishMessage.mockResolvedValue()
+      const boundaryEntity = { ...mockEntity, entityTimestamp: Date.now() - maxAgeInSeconds * 1000 }
+
+      const deployer = await createDeployerComponent(components)
+      await deployer.scheduleEntityDeployment(boundaryEntity, mockServers)
+
+      await jest.advanceTimersByTimeAsync(0)
+
+      expect(metricsMock.increment).not.toHaveBeenCalledWith('entity_skipped_old', expect.anything())
+      expect(storageMock.exist).toHaveBeenCalled()
+      expect(entityDownloaderMock.downloadEntity).toHaveBeenCalledWith(boundaryEntity, mockServers)
+    })
+
+    it.each(['', '0', 'abc', '-3600'])('should process all entities when config is "%s" (filter disabled)', async (configValue) => {
+      configMock.getString.mockResolvedValue(configValue)
       storageMock.exist.mockResolvedValue(false)
       entityDownloaderMock.downloadEntity.mockResolvedValue()
       snsPublisherMock.publishMessage.mockResolvedValue()
