@@ -1,6 +1,7 @@
 import { AppComponents } from '../../../src/types'
 import { createDeployerComponent } from '../../../src/adapters/deployer'
 import {
+  configMock,
   logsMock,
   storageMock,
   fetcherMock,
@@ -15,6 +16,7 @@ describe('DeployerComponent', () => {
   let components: jest.Mocked<
     Pick<
       AppComponents,
+      | 'config'
       | 'logs'
       | 'storage'
       | 'downloadQueue'
@@ -32,8 +34,10 @@ describe('DeployerComponent', () => {
   beforeEach(() => {
     downloadQueueMock.onSizeLessThan.mockResolvedValue()
     downloadQueueMock.scheduleJob.mockImplementation(async (fn) => await fn())
+    configMock.getString.mockResolvedValue('')
 
     components = {
+      config: configMock,
       logs: logsMock,
       storage: storageMock,
       downloadQueue: downloadQueueMock,
@@ -65,7 +69,7 @@ describe('DeployerComponent', () => {
   it('should call mark as deployed when the entity is already stored', async () => {
     storageMock.exist.mockResolvedValue(true)
 
-    const deployer = createDeployerComponent(components)
+    const deployer = await createDeployerComponent(components)
     await deployer.scheduleEntityDeployment(mockEntity, mockServers)
 
     expect(metricsMock.increment).toHaveBeenCalledWith('entity_already_stored', {
@@ -81,7 +85,7 @@ describe('DeployerComponent', () => {
 
     const mockEntityWithoutMarkAsDeployed = { ...mockEntity, markAsDeployed: undefined }
 
-    const deployer = createDeployerComponent(components)
+    const deployer = await createDeployerComponent(components)
     await deployer.scheduleEntityDeployment(mockEntityWithoutMarkAsDeployed, mockServers)
 
     expect(metricsMock.increment).toHaveBeenCalledWith('entity_already_stored', {
@@ -96,7 +100,7 @@ describe('DeployerComponent', () => {
     entityDownloaderMock.downloadEntity.mockResolvedValue()
     snsPublisherMock.publishMessage.mockResolvedValue()
 
-    const deployer = createDeployerComponent(components)
+    const deployer = await createDeployerComponent(components)
     await deployer.scheduleEntityDeployment(mockEntity, mockServers)
 
     await jest.advanceTimersByTimeAsync(0)
@@ -118,7 +122,7 @@ describe('DeployerComponent', () => {
     storageMock.exist.mockResolvedValue(false)
     entityDownloaderMock.downloadEntity.mockRejectedValue(new Error('Network Error'))
 
-    const deployer = createDeployerComponent(components)
+    const deployer = await createDeployerComponent(components)
     await deployer.scheduleEntityDeployment(mockEntity, mockServers)
 
     expect(metricsMock.increment).toHaveBeenCalledWith('entity_deployment_failure', {
@@ -132,7 +136,7 @@ describe('DeployerComponent', () => {
     storageMock.exist.mockResolvedValue(false)
     entityDownloaderMock.downloadEntity.mockRejectedValue(new Error('status: 404'))
 
-    const deployer = createDeployerComponent(components)
+    const deployer = await createDeployerComponent(components)
     await deployer.scheduleEntityDeployment(mockEntity, mockServers)
 
     expect(metricsMock.increment).toHaveBeenCalledWith('entity_deployment_failure', {
@@ -146,12 +150,87 @@ describe('DeployerComponent', () => {
     storageMock.exist.mockResolvedValue(false)
     downloadQueueMock.onSizeLessThan.mockRejectedValue(new Error('Queue Error'))
 
-    const deployer = createDeployerComponent(components)
+    const deployer = await createDeployerComponent(components)
     await deployer.scheduleEntityDeployment(mockEntity, mockServers)
 
     expect(metricsMock.increment).toHaveBeenCalledWith('entity_deployment_failure', {
       entityType: mockEntity.entityType
     })
     expect(mockEntity.markAsDeployed).not.toHaveBeenCalled()
+  })
+
+  describe('entity age filter', () => {
+    it('should skip and mark as deployed entities older than the configured max age', async () => {
+      const maxAgeInSeconds = 3600
+      configMock.getString.mockResolvedValue(String(maxAgeInSeconds))
+      const oldTimestamp = Date.now() - (maxAgeInSeconds + 1) * 1000
+      const oldEntity = { ...mockEntity, entityTimestamp: oldTimestamp }
+
+      const deployer = await createDeployerComponent(components)
+      await deployer.scheduleEntityDeployment(oldEntity, mockServers)
+
+      expect(metricsMock.increment).toHaveBeenCalledWith('entity_skipped_old', {
+        entityType: oldEntity.entityType
+      })
+      expect(oldEntity.markAsDeployed).toHaveBeenCalled()
+      expect(storageMock.exist).not.toHaveBeenCalled()
+      expect(downloadQueueMock.onSizeLessThan).not.toHaveBeenCalled()
+      expect(entityDownloaderMock.downloadEntity).not.toHaveBeenCalled()
+    })
+
+    it('should process recent entities normally when the age filter is enabled', async () => {
+      const maxAgeInSeconds = 3600
+      configMock.getString.mockResolvedValue(String(maxAgeInSeconds))
+      storageMock.exist.mockResolvedValue(false)
+      entityDownloaderMock.downloadEntity.mockResolvedValue()
+      snsPublisherMock.publishMessage.mockResolvedValue()
+
+      const deployer = await createDeployerComponent(components)
+      await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+
+      await jest.advanceTimersByTimeAsync(0)
+
+      expect(metricsMock.increment).not.toHaveBeenCalledWith('entity_skipped_old', expect.anything())
+      expect(entityDownloaderMock.downloadEntity).toHaveBeenCalledWith(mockEntity, mockServers)
+      expect(mockEntity.markAsDeployed).toHaveBeenCalled()
+    })
+
+    it('should not skip an entity aged exactly at the threshold', async () => {
+      const maxAgeInSeconds = 3600
+      configMock.getString.mockResolvedValue(String(maxAgeInSeconds))
+      storageMock.exist.mockResolvedValue(false)
+      entityDownloaderMock.downloadEntity.mockResolvedValue()
+      snsPublisherMock.publishMessage.mockResolvedValue()
+      const boundaryEntity = { ...mockEntity, entityTimestamp: Date.now() - maxAgeInSeconds * 1000 }
+
+      const deployer = await createDeployerComponent(components)
+      await deployer.scheduleEntityDeployment(boundaryEntity, mockServers)
+
+      await jest.advanceTimersByTimeAsync(0)
+
+      expect(metricsMock.increment).not.toHaveBeenCalledWith('entity_skipped_old', expect.anything())
+      expect(storageMock.exist).toHaveBeenCalled()
+      expect(entityDownloaderMock.downloadEntity).toHaveBeenCalledWith(boundaryEntity, mockServers)
+    })
+
+    it.each(['', '0', 'abc', '-3600'])(
+      'should process all entities when config is "%s" (filter disabled)',
+      async (configValue) => {
+        configMock.getString.mockResolvedValue(configValue)
+        storageMock.exist.mockResolvedValue(false)
+        entityDownloaderMock.downloadEntity.mockResolvedValue()
+        snsPublisherMock.publishMessage.mockResolvedValue()
+        const oldTimestamp = Date.now() - 10 * 365 * 24 * 3600 * 1000
+        const oldEntity = { ...mockEntity, entityTimestamp: oldTimestamp }
+
+        const deployer = await createDeployerComponent(components)
+        await deployer.scheduleEntityDeployment(oldEntity, mockServers)
+
+        await jest.advanceTimersByTimeAsync(0)
+
+        expect(metricsMock.increment).not.toHaveBeenCalledWith('entity_skipped_old', expect.anything())
+        expect(entityDownloaderMock.downloadEntity).toHaveBeenCalledWith(oldEntity, mockServers)
+      }
+    )
   })
 })

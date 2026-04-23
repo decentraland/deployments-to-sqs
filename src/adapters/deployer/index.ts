@@ -1,9 +1,10 @@
 import { DeployableEntity, IDeployerComponent, TimeRange } from '@dcl/snapshots-fetcher/dist/types'
 import { AppComponents, EntityDownloadError, SnsPublisherComponent } from '../../types'
 
-export function createDeployerComponent(
+export async function createDeployerComponent(
   components: Pick<
     AppComponents,
+    | 'config'
     | 'logs'
     | 'storage'
     | 'downloadQueue'
@@ -13,8 +14,16 @@ export function createDeployerComponent(
     | 'snsEventPublisher'
     | 'entityDownloader'
   >
-): IDeployerComponent {
+): Promise<IDeployerComponent> {
   const logger = components.logs.getLogger('Deployer')
+
+  const maxAgeInSeconds = parseInt((await components.config.getString('ENTITY_MAX_AGE_IN_SECONDS')) ?? '', 10)
+
+  if (maxAgeInSeconds > 0) {
+    logger.info('Entity age filter enabled', { maxAgeInSeconds })
+  } else {
+    logger.info('Entity age filter disabled')
+  }
 
   async function publishDeploymentNotifications(entity: DeployableEntity & { metadata: any }, servers: string[]) {
     const { snsPublisher, snsEventPublisher } = components
@@ -42,6 +51,20 @@ export function createDeployerComponent(
       })
 
       try {
+        if (maxAgeInSeconds > 0) {
+          const entityAgeInSeconds = (Date.now() - entity.entityTimestamp) / 1000
+          if (entityAgeInSeconds > maxAgeInSeconds) {
+            logger.debug('Skipping old entity', {
+              entityId: entity.entityId,
+              entityType: entity.entityType,
+              entityAgeInSeconds,
+              maxAgeInSeconds
+            })
+            components.metrics.increment('entity_skipped_old', { entityType: entity.entityType })
+            return await markAsDeployed()
+          }
+        }
+
         const exists = await components.storage.exist(entity.entityId)
 
         if (exists) {
