@@ -13,6 +13,8 @@ export async function createDeployerComponent(
     | 'snsPublisher'
     | 'snsEventPublisher'
     | 'entityDownloader'
+    | 'contentChangeChecker'
+    | 'manifestCopier'
   >
 ): Promise<IDeployerComponent> {
   const logger = components.logs.getLogger('Deployer')
@@ -76,6 +78,28 @@ export async function createDeployerComponent(
             entityType: entity.entityType
           })
           return await markAsDeployed()
+        }
+
+        // Check if content has changed compared to the registry
+        const changeResult = await components.contentChangeChecker.check(entity, servers)
+        if (changeResult.changed === false) {
+          const { registryEntity } = changeResult
+          logger.info('Content unchanged, copying manifests', {
+            entityId: entity.entityId,
+            registryEntityId: registryEntity.id
+          })
+          try {
+            await components.manifestCopier.copyAndNotify(entity, registryEntity)
+            components.metrics.increment('entity_skipped_content_unchanged', {
+              entityType: entity.entityType
+            })
+            return await markAsDeployed()
+          } catch (error: any) {
+            logger.warn('Manifest copy failed, falling back to normal deployment', {
+              entityId: entity.entityId,
+              error: error?.message
+            })
+          }
         }
 
         await components.downloadQueue.onSizeLessThan(1000)

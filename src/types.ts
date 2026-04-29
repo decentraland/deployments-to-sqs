@@ -30,6 +30,8 @@ export type BaseComponents = {
   snsPublisher: SnsPublisherComponent
   snsEventPublisher: SnsPublisherComponent
   entityDownloader: EntityDownloaderComponent
+  contentChangeChecker: ContentChangeCheckerComponent
+  manifestCopier: ManifestCopierComponent
 }
 
 export type SnsPublisherComponent = {
@@ -38,6 +40,30 @@ export type SnsPublisherComponent = {
 
 export type EntityDownloaderComponent = {
   downloadEntity: (entity: DeployableEntity, contentServerUrls: string[]) => Promise<void>
+}
+
+export type RegistryEntity = {
+  id: string
+  content: { file: string; hash: string }[]
+  versions: {
+    assets: {
+      windows: { version: string; buildDate: string }
+      mac: { version: string; buildDate: string }
+      webgl: { version: string; buildDate: string }
+    }
+  }
+}
+
+export type ContentChangeResult =
+  | { changed: true }
+  | { changed: false; registryEntity: RegistryEntity }
+
+export type ContentChangeCheckerComponent = {
+  check: (entity: DeployableEntity, contentServerUrls: string[]) => Promise<ContentChangeResult>
+}
+
+export type ManifestCopierComponent = {
+  copyAndNotify: (entity: DeployableEntity, registryEntity: RegistryEntity) => Promise<void>
 }
 
 // components used in runtime

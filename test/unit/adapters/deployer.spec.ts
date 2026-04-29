@@ -8,7 +8,9 @@ import {
   metricsMock,
   snsPublisherMock,
   entityDownloaderMock,
-  downloadQueueMock
+  downloadQueueMock,
+  contentChangeCheckerMock,
+  manifestCopierMock
 } from '../../mocks/components'
 import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
 
@@ -25,6 +27,8 @@ describe('DeployerComponent', () => {
       | 'snsPublisher'
       | 'snsEventPublisher'
       | 'entityDownloader'
+      | 'contentChangeChecker'
+      | 'manifestCopier'
     >
   >
 
@@ -35,6 +39,8 @@ describe('DeployerComponent', () => {
     downloadQueueMock.onSizeLessThan.mockResolvedValue()
     downloadQueueMock.scheduleJob.mockImplementation(async (fn) => await fn())
     configMock.getString.mockResolvedValue('')
+    contentChangeCheckerMock.check.mockResolvedValue({ changed: true })
+    manifestCopierMock.copyAndNotify.mockResolvedValue()
 
     components = {
       config: configMock,
@@ -45,7 +51,9 @@ describe('DeployerComponent', () => {
       metrics: metricsMock,
       snsPublisher: snsPublisherMock,
       snsEventPublisher: snsPublisherMock,
-      entityDownloader: entityDownloaderMock
+      entityDownloader: entityDownloaderMock,
+      contentChangeChecker: contentChangeCheckerMock,
+      manifestCopier: manifestCopierMock
     }
 
     mockEntity = {
@@ -232,5 +240,66 @@ describe('DeployerComponent', () => {
         expect(entityDownloaderMock.downloadEntity).toHaveBeenCalledWith(oldEntity, mockServers)
       }
     )
+  })
+
+  describe('content change check', () => {
+    const registryEntity = {
+      id: 'previous-entity-id',
+      content: [{ file: 'scene.json', hash: 'hash1' }],
+      versions: {
+        assets: {
+          windows: { version: 'v5', buildDate: '2024-01-01' },
+          mac: { version: 'v5', buildDate: '2024-01-01' },
+          webgl: { version: 'v5', buildDate: '2024-01-01' }
+        }
+      }
+    }
+
+    it('should skip entity and copy manifests when content has not changed', async () => {
+      storageMock.exist.mockResolvedValue(false)
+      contentChangeCheckerMock.check.mockResolvedValue({ changed: false, registryEntity })
+
+      const deployer = await createDeployerComponent(components)
+      await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+
+      expect(manifestCopierMock.copyAndNotify).toHaveBeenCalledWith(mockEntity, registryEntity)
+      expect(metricsMock.increment).toHaveBeenCalledWith('entity_skipped_content_unchanged', {
+        entityType: mockEntity.entityType
+      })
+      expect(mockEntity.markAsDeployed).toHaveBeenCalled()
+      expect(downloadQueueMock.onSizeLessThan).not.toHaveBeenCalled()
+      expect(entityDownloaderMock.downloadEntity).not.toHaveBeenCalled()
+    })
+
+    it('should fall back to normal deployment when manifest copy fails', async () => {
+      storageMock.exist.mockResolvedValue(false)
+      contentChangeCheckerMock.check.mockResolvedValue({ changed: false, registryEntity })
+      manifestCopierMock.copyAndNotify.mockRejectedValue(new Error('S3 error'))
+      entityDownloaderMock.downloadEntity.mockResolvedValue()
+      snsPublisherMock.publishMessage.mockResolvedValue()
+
+      const deployer = await createDeployerComponent(components)
+      await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+
+      await jest.advanceTimersByTimeAsync(0)
+
+      expect(downloadQueueMock.onSizeLessThan).toHaveBeenCalledWith(1000)
+      expect(entityDownloaderMock.downloadEntity).toHaveBeenCalledWith(mockEntity, mockServers)
+    })
+
+    it('should proceed normally when content has changed', async () => {
+      storageMock.exist.mockResolvedValue(false)
+      contentChangeCheckerMock.check.mockResolvedValue({ changed: true })
+      entityDownloaderMock.downloadEntity.mockResolvedValue()
+      snsPublisherMock.publishMessage.mockResolvedValue()
+
+      const deployer = await createDeployerComponent(components)
+      await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+
+      await jest.advanceTimersByTimeAsync(0)
+
+      expect(manifestCopierMock.copyAndNotify).not.toHaveBeenCalled()
+      expect(entityDownloaderMock.downloadEntity).toHaveBeenCalledWith(mockEntity, mockServers)
+    })
   })
 })

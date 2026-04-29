@@ -1,6 +1,11 @@
 import { IContentStorageComponent } from '@dcl/catalyst-storage'
 import { IConfigComponent, IFetchComponent, ILoggerComponent } from '@well-known-components/interfaces'
-import { EntityDownloaderComponent, SnsPublisherComponent } from '../../src/types'
+import {
+  ContentChangeCheckerComponent,
+  EntityDownloaderComponent,
+  ManifestCopierComponent,
+  SnsPublisherComponent
+} from '../../src/types'
 import { IJobQueue } from '@dcl/snapshots-fetcher/dist/job-queue-port'
 
 export const configMock: jest.Mocked<IConfigComponent> = {
@@ -54,4 +59,12 @@ export const snsPublisherMock: jest.Mocked<SnsPublisherComponent> = {
 
 export const entityDownloaderMock: jest.Mocked<EntityDownloaderComponent> = {
   downloadEntity: jest.fn()
+}
+
+export const contentChangeCheckerMock: jest.Mocked<ContentChangeCheckerComponent> = {
+  check: jest.fn()
+}
+
+export const manifestCopierMock: jest.Mocked<ManifestCopierComponent> = {
+  copyAndNotify: jest.fn()
 }

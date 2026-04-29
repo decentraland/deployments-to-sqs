@@ -56,6 +56,11 @@ export const metricDeclarations = {
     help: 'Count entities skipped because they are older than the configured max age',
     type: IMetricsComponent.CounterType,
     labelNames: ['entityType']
+  },
+  entity_skipped_content_unchanged: {
+    help: 'Count entities skipped because their content has not changed',
+    type: IMetricsComponent.CounterType,
+    labelNames: ['entityType']
   }
 }
 

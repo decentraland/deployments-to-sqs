@@ -18,6 +18,8 @@ import { Readable } from 'stream'
 import { createEntityDownloaderComponent } from './adapters/entity-downloader'
 import { createSnsDeploymentPublisherComponent, createSnsEventPublisherComponent } from './adapters/sns'
 import { createResilientContentStorage } from './adapters/storage'
+import { createContentChangeCheckerComponent } from './adapters/content-change-checker'
+import { createManifestCopierComponent } from './adapters/manifest-copier'
 
 // Initialize all the components of the app
 export async function initComponents(): Promise<AppComponents> {
@@ -53,6 +55,8 @@ export async function initComponents(): Promise<AppComponents> {
   const snsEventPublisher = await createSnsEventPublisherComponent({ config, logs, metrics })
 
   const entityDownloader = await createEntityDownloaderComponent({ config, logs, storage, fetch, metrics })
+  const contentChangeChecker = await createContentChangeCheckerComponent({ config, logs, fetch, metrics })
+  const manifestCopier = await createManifestCopierComponent({ config, logs, fetch, metrics })
 
   const deployer = await createDeployerComponent({
     config,
@@ -63,7 +67,9 @@ export async function initComponents(): Promise<AppComponents> {
     metrics,
     snsPublisher,
     snsEventPublisher,
-    entityDownloader
+    entityDownloader,
+    contentChangeChecker,
+    manifestCopier
   })
 
   const key = (hash: string) => `stored-snapshot-${hash}`
@@ -143,6 +149,8 @@ export async function initComponents(): Promise<AppComponents> {
     deployer,
     snsPublisher,
     snsEventPublisher,
-    entityDownloader
+    entityDownloader,
+    contentChangeChecker,
+    manifestCopier
   }
 }
