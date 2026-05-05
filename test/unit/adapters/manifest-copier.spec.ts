@@ -1,3 +1,5 @@
+import { CopyObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3'
+import { PublishCommand, SNSClient } from '@aws-sdk/client-sns'
 import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
 import { createManifestCopierComponent } from '../../../src/adapters/manifest-copier'
 import { configMock, logsMock, fetcherMock, metricsMock } from '../../mocks/components'
@@ -16,6 +18,11 @@ jest.mock('@aws-sdk/client-sns', () => ({
   SNSClient: jest.fn().mockImplementation(() => ({ send: mockSnsSend })),
   PublishCommand: jest.fn().mockImplementation((args) => ({ ...args, _type: 'PublishCommand' }))
 }))
+
+const MockCopyObjectCommand = CopyObjectCommand as unknown as jest.Mock
+const MockPutObjectCommand = PutObjectCommand as unknown as jest.Mock
+const MockPublishCommand = PublishCommand as unknown as jest.Mock
+const MockSNSClient = SNSClient as unknown as jest.Mock
 
 describe('ManifestCopierComponent', () => {
   const mockEntity: DeployableEntity = {
@@ -88,9 +95,7 @@ describe('ManifestCopierComponent', () => {
       metrics: metricsMock
     })
 
-    await expect(copier.copyAndNotify(mockEntity, registryEntity)).rejects.toThrow(
-      'ManifestCopier not configured'
-    )
+    await expect(copier.copyAndNotify(mockEntity, registryEntity)).rejects.toThrow('ManifestCopier not configured')
   })
 
   it('should copy files, upload manifests, and publish events for all platforms', async () => {
@@ -117,8 +122,6 @@ describe('ManifestCopierComponent', () => {
     setupConfig()
     setupFetchManifest()
 
-    const { CopyObjectCommand } = require('@aws-sdk/client-s3')
-
     const copier = await createManifestCopierComponent({
       config: configMock,
       logs: logsMock,
@@ -129,7 +132,7 @@ describe('ManifestCopierComponent', () => {
     await copier.copyAndNotify(mockEntity, registryEntity)
 
     // First platform (windows), first file
-    expect(CopyObjectCommand).toHaveBeenCalledWith(
+    expect(MockCopyObjectCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         Bucket: 'test-bucket',
         CopySource: 'test-bucket/v5/old-entity-id/file1.glb',
@@ -142,8 +145,6 @@ describe('ManifestCopierComponent', () => {
     setupConfig()
     setupFetchManifest()
 
-    const { PutObjectCommand } = require('@aws-sdk/client-s3')
-
     const copier = await createManifestCopierComponent({
       config: configMock,
       logs: logsMock,
@@ -154,7 +155,7 @@ describe('ManifestCopierComponent', () => {
     await copier.copyAndNotify(mockEntity, registryEntity)
 
     // webgl manifest has no platform suffix
-    expect(PutObjectCommand).toHaveBeenCalledWith(
+    expect(MockPutObjectCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         Bucket: 'test-bucket',
         Key: 'manifest/new-entity-id.json'
@@ -162,7 +163,7 @@ describe('ManifestCopierComponent', () => {
     )
 
     // windows manifest has platform suffix
-    expect(PutObjectCommand).toHaveBeenCalledWith(
+    expect(MockPutObjectCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         Key: 'manifest/new-entity-id_windows.json'
       })
@@ -189,8 +190,6 @@ describe('ManifestCopierComponent', () => {
     setupConfig()
     setupFetchManifest()
 
-    const { PublishCommand } = require('@aws-sdk/client-sns')
-
     const copier = await createManifestCopierComponent({
       config: configMock,
       logs: logsMock,
@@ -200,8 +199,8 @@ describe('ManifestCopierComponent', () => {
 
     await copier.copyAndNotify(mockEntity, registryEntity)
 
-    expect(PublishCommand).toHaveBeenCalledTimes(3)
-    const firstCallArgs = PublishCommand.mock.calls[0][0]
+    expect(MockPublishCommand).toHaveBeenCalledTimes(3)
+    const firstCallArgs = MockPublishCommand.mock.calls[0][0]
     expect(firstCallArgs.TopicArn).toBe('arn:aws:sns:us-east-1:123456789:test-topic')
 
     const message = JSON.parse(firstCallArgs.Message)
@@ -213,8 +212,6 @@ describe('ManifestCopierComponent', () => {
     setupConfig({ SNS_ENDPOINT: 'https://sns.example.com' })
     setupFetchManifest()
 
-    const { SNSClient } = require('@aws-sdk/client-sns')
-
     await createManifestCopierComponent({
       config: configMock,
       logs: logsMock,
@@ -222,6 +219,6 @@ describe('ManifestCopierComponent', () => {
       metrics: metricsMock
     })
 
-    expect(SNSClient).toHaveBeenCalledWith({ endpoint: 'https://sns.example.com' })
+    expect(MockSNSClient).toHaveBeenCalledWith({ endpoint: 'https://sns.example.com' })
   })
 })
