@@ -54,9 +54,7 @@ export type RegistryEntity = {
   }
 }
 
-export type ContentChangeResult =
-  | { changed: true }
-  | { changed: false; registryEntity: RegistryEntity }
+export type ContentChangeResult = { changed: true } | { changed: false; registryEntity: RegistryEntity }
 
 export type ContentChangeCheckerComponent = {
   check: (entity: DeployableEntity, contentServerUrls: string[]) => Promise<ContentChangeResult>

@@ -35,7 +35,9 @@ export async function createManifestCopierComponent(
   return {
     async copyAndNotify(entity: DeployableEntity, registryEntity: RegistryEntity): Promise<void> {
       if (!s3 || !cdnBucket || !cdnUrl || !abVersion || !sns || !eventsArn) {
-        throw new Error('ManifestCopier not configured: missing ASSET_BUNDLE_CDN_BUCKET, CDN_URL, VERSION, or EVENTS_SNS_ARN')
+        throw new Error(
+          'ManifestCopier not configured: missing ASSET_BUNDLE_CDN_BUCKET, CDN_URL, VERSION, or EVENTS_SNS_ARN'
+        )
       }
 
       const oldEntityId = registryEntity.id
