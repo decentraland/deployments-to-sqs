@@ -22,6 +22,7 @@
   "dependencies": {
     "@aws-sdk/client-sns": "^3.616.0",
     "@dcl/catalyst-storage": "^4.3.0",
+    "@dcl/fetch-component": "^1.0.1",
     "@dcl/schemas": "^15.3.3",
     "@dcl/snapshots-fetcher": "^9.1.0",
     "@well-known-components/env-config-provider": "^1.1.1",

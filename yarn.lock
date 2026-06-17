@@ -748,6 +748,13 @@
     destroy "^1.2.0"
     file-type "15"
 
+"@dcl/core-commons@0.10.0":
+  version "0.10.0"
+  resolved "https://registry.yarnpkg.com/@dcl/core-commons/-/core-commons-0.10.0.tgz#cbdcc810f55a1a708b9250ab566b951f312841e2"
+  integrity sha512-lcCgnwxkq/MoTbU59wKnspmVaQyEIP8SRRDUCd3Werrwj+nsH6T7xGuVo17cLVEd8D/Hi3NLFtBiq+N7kZAt/A==
+  dependencies:
+    "@well-known-components/interfaces" "^1.5.2"
+
 "@dcl/eslint-config@^1.1.12":
   version "1.1.12"
   resolved "https://registry.npmjs.org/@dcl/eslint-config/-/eslint-config-1.1.12.tgz"
@@ -764,6 +771,13 @@
     eslint-plugin-import "npm:eslint-plugin-i@^2.27.5-3"
     eslint-plugin-prettier "^4.2.1"
     prettier "^2.8.8"
+
+"@dcl/fetch-component@^1.0.1":
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/@dcl/fetch-component/-/fetch-component-1.0.1.tgz#7cfb6d2d2bc6b40c9eca238be212626d511284c4"
+  integrity sha512-OgkOeBtIfxuQ96caFnE+JDORiQEBKajF3DpB7T5ZcoVkbnKGnJ1fmk4eOklzA+Eqt2LOAKsXfKa1RqR9bPwUlg==
+  dependencies:
+    "@dcl/core-commons" "0.10.0"
 
 "@dcl/hashing@^3.0.3":
   version "3.0.4"
@@ -1935,6 +1949,15 @@
   version "1.4.2"
   resolved "https://registry.npmjs.org/@well-known-components/interfaces/-/interfaces-1.4.2.tgz"
   integrity sha512-1tkr/OhZ4UmnQiST2svKznEiJ86crV2S+AIhokhowR4MexAKWgYlmZpoP6VIcgDVPf7nu8hOtIPMQaCZ+COC0A==
+  dependencies:
+    "@types/node" "^20.3.1"
+    "@types/node-fetch" "^2.5.12"
+    typed-url-params "^1.0.1"
+
+"@well-known-components/interfaces@^1.5.2":
+  version "1.5.2"
+  resolved "https://registry.yarnpkg.com/@well-known-components/interfaces/-/interfaces-1.5.2.tgz#ef7001a19d410459e65b216dd948d15be19e4efa"
+  integrity sha512-TzKQblOci2Azczk1DZ4JL5aJW7hwq7kHrFMO4lCRMmW51bA71BtiZlq0WP72Dln067xTSoHQAU4WHCFJlGYvEQ==
   dependencies:
     "@types/node" "^20.3.1"
     "@types/node-fetch" "^2.5.12"
