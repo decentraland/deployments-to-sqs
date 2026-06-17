@@ -1,10 +1,10 @@
 import { IJobQueue } from '@dcl/snapshots-fetcher/dist/job-queue-port'
 import { DeployableEntity, IDeployerComponent, SynchronizerComponent } from '@dcl/snapshots-fetcher/dist/types'
 import type { IFetchComponent } from '@well-known-components/http-server'
+import type { IHttpServerComponent } from '@dcl/core-commons'
 import type {
   IConfigComponent,
   ILoggerComponent,
-  IHttpServerComponent,
   IBaseComponent,
   IMetricsComponent
 } from '@well-known-components/interfaces'
