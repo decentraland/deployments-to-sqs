@@ -7,7 +7,14 @@ export const configMock: jest.Mocked<IConfigComponent> = {
   getNumber: jest.fn().mockResolvedValue(''),
   getString: jest.fn().mockResolvedValue(''),
   requireNumber: jest.fn().mockResolvedValue('a,b,c'),
-  requireString: jest.fn().mockResolvedValue('a,b,c')
+  // main() validates CONTENT_SERVER_URLS against ALLOWED_CONTENT_SERVER_HOSTS at startup
+  // (the SSRF allowlist guard) and would otherwise throw, so both keys resolve to
+  // matching catalyst values here. Other keys keep the generic placeholder value.
+  requireString: jest.fn().mockImplementation(async (key: string) => {
+    if (key === 'CONTENT_SERVER_URLS') return 'https://peer.decentraland.org/content'
+    if (key === 'ALLOWED_CONTENT_SERVER_HOSTS') return 'peer.decentraland.org'
+    return 'a,b,c'
+  })
 }
 
 export const metricsMock: jest.Mocked<any> = {

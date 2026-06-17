@@ -33,6 +33,10 @@ async function initComponents(): Promise<TestComponents> {
     storage,
     localFetch: await createLocalFetchCompoment(config),
     config: configMock,
-    metrics: metricsMock
+    metrics: metricsMock,
+    // Stub the synchronizer so `main()` doesn't kick off a real catalyst sync
+    // during tests (CONTENT_SERVER_URLS now resolves to a real allowlisted host
+    // to satisfy the startup allowlist guard).
+    synchronizer: { syncWithServers: jest.fn().mockResolvedValue({}) } as any
   }
 }

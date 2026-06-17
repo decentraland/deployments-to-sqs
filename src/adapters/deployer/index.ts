@@ -1,5 +1,6 @@
 import { DeployableEntity, IDeployerComponent, TimeRange } from '@dcl/snapshots-fetcher/dist/types'
 import { AppComponents, EntityDownloadError, SnsPublisherComponent } from '../../types'
+import { isValidEntityId } from '../../logic/validation'
 
 export async function createDeployerComponent(
   components: Pick<
@@ -49,6 +50,19 @@ export async function createDeployerComponent(
       components.metrics.increment('schedule_entity_deployment_attempt', {
         entityType: entity.entityType
       })
+
+      // entityId comes from the (external) content server and flows into storage
+      // keys. A real entity id is a bare CID; reject anything with separators or
+      // `..` to prevent path traversal / S3-key injection. Drop it permanently
+      // (markAsDeployed) so snapshot-fetcher doesn't retry an unprocessable entity.
+      if (!isValidEntityId(entity.entityId)) {
+        logger.warn('Skipping entity: entityId is not a bare CID (path/key-injection guard)', {
+          entityId: String(entity.entityId).slice(0, 80),
+          entityType: entity.entityType
+        })
+        components.metrics.increment('entity_skipped_invalid_id', { entityType: entity.entityType })
+        return await markAsDeployed()
+      }
 
       try {
         if (maxAgeInSeconds > 0) {
