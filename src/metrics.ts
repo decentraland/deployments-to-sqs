@@ -56,6 +56,11 @@ export const metricDeclarations = {
     help: 'Count entities skipped because they are older than the configured max age',
     type: IMetricsComponent.CounterType,
     labelNames: ['entityType']
+  },
+  entity_skipped_invalid_id: {
+    help: 'Count entities skipped because their entityId is not a bare CID (path/key-injection guard)',
+    type: IMetricsComponent.CounterType,
+    labelNames: ['entityType']
   }
 }
 

@@ -66,6 +66,20 @@ describe('DeployerComponent', () => {
     jest.clearAllTimers()
   })
 
+  it('should skip and mark as deployed an entity whose entityId is not a bare CID', async () => {
+    const maliciousEntity = { ...mockEntity, entityId: '../../etc/passwd' }
+
+    const deployer = await createDeployerComponent(components)
+    await deployer.scheduleEntityDeployment(maliciousEntity, mockServers)
+
+    expect(metricsMock.increment).toHaveBeenCalledWith('entity_skipped_invalid_id', {
+      entityType: maliciousEntity.entityType
+    })
+    expect(maliciousEntity.markAsDeployed).toHaveBeenCalled()
+    expect(storageMock.exist).not.toHaveBeenCalled()
+    expect(entityDownloaderMock.downloadEntity).not.toHaveBeenCalled()
+  })
+
   it('should call mark as deployed when the entity is already stored', async () => {
     storageMock.exist.mockResolvedValue(true)
 
