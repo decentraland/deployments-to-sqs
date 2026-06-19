@@ -62,7 +62,12 @@ describe('SnsPublisherComponent', () => {
     const publisher = await createSnsDeploymentPublisherComponent(components)
     await publisher.publishMessage(mockEntity, mockServers)
 
+    // The deployment body now also carries `type`/`subType` so the core publisher
+    // can derive the SNS message attributes from it (DeploymentToSqs permits
+    // additional properties).
     const expectedMessage = {
+      type: Events.Type.CATALYST_DEPLOYMENT,
+      subType: mockEntity.entityType as Events.SubType.CatalystDeployment,
       entity: mockEntity,
       contentServerUrls: mockServers
     }
