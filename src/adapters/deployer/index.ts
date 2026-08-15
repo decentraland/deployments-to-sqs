@@ -1,6 +1,7 @@
 import { DeployableEntity, IDeployerComponent, TimeRange } from '@dcl/snapshots-fetcher'
 import { AppComponents, EntityDownloadError, SnsPublisherComponent } from '../../types'
 import { isValidEntityId } from '../../logic/validation'
+import { toEntityTypeLabel } from '../../logic/entity-type-label'
 
 export async function createDeployerComponent(
   components: Pick<
@@ -47,8 +48,11 @@ export async function createDeployerComponent(
 
       const markAsDeployed = entity.markAsDeployed || (async () => {})
 
+      // Remote input: clamp before it reaches a label. Log fields keep the raw value.
+      const entityTypeLabel = toEntityTypeLabel(entity.entityType)
+
       components.metrics.increment('schedule_entity_deployment_attempt', {
-        entityType: entity.entityType
+        entityType: entityTypeLabel
       })
 
       // entityId comes from the (external) content server and flows into storage
@@ -60,7 +64,7 @@ export async function createDeployerComponent(
           entityId: String(entity.entityId).slice(0, 80),
           entityType: entity.entityType
         })
-        components.metrics.increment('entity_skipped_invalid_id', { entityType: entity.entityType })
+        components.metrics.increment('entity_skipped_invalid_id', { entityType: entityTypeLabel })
         return await markAsDeployed()
       }
 
@@ -74,7 +78,7 @@ export async function createDeployerComponent(
               entityAgeInSeconds,
               maxAgeInSeconds
             })
-            components.metrics.increment('entity_skipped_old', { entityType: entity.entityType })
+            components.metrics.increment('entity_skipped_old', { entityType: entityTypeLabel })
             return await markAsDeployed()
           }
         }
@@ -87,75 +91,83 @@ export async function createDeployerComponent(
             entityType: entity.entityType
           })
           components.metrics.increment('entity_already_stored', {
-            entityType: entity.entityType
+            entityType: entityTypeLabel
           })
           return await markAsDeployed()
         }
 
         await components.downloadQueue.onSizeLessThan(1000)
 
-        // The promise below is the QUEUE's, not the job's. The job body handles its own errors, but
-        // p-queue rejects the queue promise on the configured timeout — createJobQueue sets
-        // `throwOnTimeout` whenever a timeout is given, and components.ts gives it 100s. Discarding
-        // it would leave an unhandled rejection, which this service's
-        // `--unhandled-rejections=strict --abort-on-uncaught-exception` start flags turn into an
-        // aborted process. Still deliberately not awaited: scheduling must stay non-blocking.
-        void components.downloadQueue
-          .scheduleJob(async () => {
-            try {
-              const metadata = await components.entityDownloader.downloadEntity(entity, servers)
+        // IJobQueue exposes no size/pending, so count the transitions here.
+        components.metrics.increment('download_queue_size')
 
-              await publishDeploymentNotifications({ ...entity, metadata }, servers)
+        // scheduleJob throws synchronously on a stopped queue, so .catch cannot see it.
+        try {
+          // The queue's promise, not the job's: p-queue rejects it on timeout, and discarding that
+          // aborts the process under --unhandled-rejections=strict. Not awaited, to stay non-blocking.
+          void components.downloadQueue
+            .scheduleJob(async () => {
+              // Queued -> running; the finally below settles it even if the job throws.
+              components.metrics.decrement('download_queue_size')
+              components.metrics.increment('download_queue_pending')
+              try {
+                const metadata = await components.entityDownloader.downloadEntity(entity, servers)
 
-              await markAsDeployed()
-
-              components.metrics.increment('entity_deployment_success', {
-                entityType: entity.entityType
-              })
-            } catch (error: any) {
-              if (error instanceof EntityDownloadError) {
-                return
-              }
-
-              const isNotRetryable = /status: 4\d{2}/.test(error.message)
-
-              logger.error('Failed to publish entity', {
-                entityId: entity.entityId,
-                entityType: entity.entityType,
-                error: error?.message,
-                stack: error?.stack
-              })
-
-              components.metrics.increment('entity_deployment_failure', {
-                retryable: isNotRetryable ? 'false' : 'true',
-                entityType: entity.entityType
-              })
-
-              if (isNotRetryable) {
-                logger.error('Failed to download entity', {
-                  entityId: entity.entityId,
-                  entityType: entity.entityType,
-                  error: error?.message
-                })
+                await publishDeploymentNotifications({ ...entity, metadata }, servers)
 
                 await markAsDeployed()
-              }
-            }
-          })
-          .catch((error: any) => {
-            // Observe only. A timed-out job is NOT cancelled — p-queue stops counting it while the
-            // function keeps running — so it may still finish and markAsDeployed. Marking or
-            // retrying from here would race that.
-            logger.error('Download queue rejected a scheduled deployment', {
-              entityId: entity.entityId,
-              entityType: entity.entityType,
-              error: error?.message
-            })
 
-            components.metrics.increment('entity_deployment_queue_failure', {
-              entityType: entity.entityType
+                components.metrics.increment('entity_deployment_success', {
+                  entityType: entityTypeLabel
+                })
+              } catch (error: any) {
+                if (error instanceof EntityDownloadError) {
+                  return
+                }
+
+                const isNotRetryable = /status: 4\d{2}/.test(error.message)
+
+                logger.error('Failed to publish entity', {
+                  entityId: entity.entityId,
+                  entityType: entity.entityType,
+                  error: error?.message,
+                  stack: error?.stack
+                })
+
+                components.metrics.increment('entity_deployment_failure', {
+                  retryable: isNotRetryable ? 'false' : 'true',
+                  entityType: entityTypeLabel
+                })
+
+                if (isNotRetryable) {
+                  logger.error('Failed to download entity', {
+                    entityId: entity.entityId,
+                    entityType: entity.entityType,
+                    error: error?.message
+                  })
+
+                  await markAsDeployed()
+                }
+              } finally {
+                components.metrics.decrement('download_queue_pending')
+              }
             })
-          })
+            .catch((error: any) => {
+              // Observe only: a timed-out job keeps running and may still markAsDeployed.
+              logger.error('Download queue rejected a scheduled deployment', {
+                entityId: entity.entityId,
+                entityType: entity.entityType,
+                error: error?.message
+              })
+
+              components.metrics.increment('entity_deployment_queue_failure', {
+                entityType: entityTypeLabel
+              })
+            })
+        } catch (error: any) {
+          components.metrics.decrement('download_queue_size')
+          throw error
+        }
       } catch (error: any) {
         logger.error('Failed to schedule entity deployment', {
           entityId: entity.entityId,
@@ -164,8 +176,10 @@ export async function createDeployerComponent(
           stack: error?.stack
         })
 
+        // Scheduling failed, so the entity was never marked deployed and will be re-streamed.
         components.metrics.increment('entity_deployment_failure', {
-          entityType: entity.entityType
+          entityType: entityTypeLabel,
+          retryable: 'true'
         })
       }
     },

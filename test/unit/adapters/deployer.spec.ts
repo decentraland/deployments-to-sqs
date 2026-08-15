@@ -168,7 +168,8 @@ describe('DeployerComponent', () => {
     await deployer.scheduleEntityDeployment(mockEntity, mockServers)
 
     expect(metricsMock.increment).toHaveBeenCalledWith('entity_deployment_failure', {
-      entityType: mockEntity.entityType
+      entityType: mockEntity.entityType,
+      retryable: 'true'
     })
     expect(mockEntity.markAsDeployed).not.toHaveBeenCalled()
   })
@@ -292,6 +293,126 @@ describe('DeployerComponent', () => {
 
     it('should not mark the entity as deployed, since the job may still be running', () => {
       expect(mockEntity.markAsDeployed).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('when tracking download queue depth', () => {
+    describe('and a job is scheduled and runs to completion', () => {
+      beforeEach(async () => {
+        storageMock.exist.mockResolvedValue(false)
+        entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
+        snsPublisherMock.publishMessage.mockResolvedValue()
+
+        const deployer = await createDeployerComponent(components)
+        await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+        await jest.advanceTimersByTimeAsync(0)
+      })
+
+      it('should count the entity into the queue and back out again', () => {
+        expect(metricsMock.increment).toHaveBeenCalledWith('download_queue_size')
+        expect(metricsMock.decrement).toHaveBeenCalledWith('download_queue_size')
+      })
+
+      it('should count the job as pending while it runs and clear it afterwards', () => {
+        expect(metricsMock.increment).toHaveBeenCalledWith('download_queue_pending')
+        expect(metricsMock.decrement).toHaveBeenCalledWith('download_queue_pending')
+      })
+    })
+
+    describe('and the job fails', () => {
+      beforeEach(async () => {
+        storageMock.exist.mockResolvedValue(false)
+        entityDownloaderMock.downloadEntity.mockRejectedValue(new Error('boom'))
+
+        const deployer = await createDeployerComponent(components)
+        await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+        await jest.advanceTimersByTimeAsync(0)
+      })
+
+      it('should still clear the pending count, so a failing job cannot leak the gauge', () => {
+        expect(metricsMock.decrement).toHaveBeenCalledWith('download_queue_pending')
+      })
+    })
+
+    describe('and the queue promise rejects after the job has already run', () => {
+      // What a p-queue timeout looks like: the queue stops counting the task and rejects, but the
+      // job function is not cancelled and keeps running to completion.
+      let sizeDelta: number
+      let pendingDelta: number
+
+      beforeEach(async () => {
+        storageMock.exist.mockResolvedValue(false)
+        entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
+        snsPublisherMock.publishMessage.mockResolvedValue()
+        downloadQueueMock.scheduleJob.mockImplementation(async (fn) => {
+          await fn()
+          throw new Error('Promise timed out')
+        })
+
+        const deployer = await createDeployerComponent(components)
+        await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+        await jest.advanceTimersByTimeAsync(0)
+
+        const count = (mock: jest.Mock, name: string) => mock.mock.calls.filter((call) => call[0] === name).length
+        sizeDelta =
+          count(metricsMock.increment, 'download_queue_size') - count(metricsMock.decrement, 'download_queue_size')
+        pendingDelta =
+          count(metricsMock.increment, 'download_queue_pending') -
+          count(metricsMock.decrement, 'download_queue_pending')
+      })
+
+      it('should leave the size gauge balanced rather than drifting upward', () => {
+        expect(sizeDelta).toBe(0)
+      })
+
+      it('should leave the pending gauge balanced', () => {
+        expect(pendingDelta).toBe(0)
+      })
+
+      it('should still record the queue failure', () => {
+        expect(metricsMock.increment).toHaveBeenCalledWith('entity_deployment_queue_failure', {
+          entityType: mockEntity.entityType
+        })
+      })
+    })
+
+    describe('and the queue refuses the job because it has been stopped', () => {
+      beforeEach(async () => {
+        storageMock.exist.mockResolvedValue(false)
+        downloadQueueMock.scheduleJob.mockImplementation(() => {
+          throw new Error('The job queue was stopped and no longer accepts jobs')
+        })
+
+        const deployer = await createDeployerComponent(components)
+        await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+        await jest.advanceTimersByTimeAsync(0)
+      })
+
+      it('should undo the queued count rather than leaking it', () => {
+        expect(metricsMock.increment).toHaveBeenCalledWith('download_queue_size')
+        expect(metricsMock.decrement).toHaveBeenCalledWith('download_queue_size')
+      })
+
+      it('should record the scheduling failure as retryable, since the entity was never marked', () => {
+        expect(metricsMock.increment).toHaveBeenCalledWith('entity_deployment_failure', {
+          entityType: mockEntity.entityType,
+          retryable: 'true'
+        })
+      })
+    })
+  })
+
+  describe('when an entity type outside the known set reaches the metrics', () => {
+    beforeEach(async () => {
+      const deployer = await createDeployerComponent(components)
+      await deployer.scheduleEntityDeployment({ ...mockEntity, entityType: 'not-a-real-type' }, mockServers)
+      await jest.advanceTimersByTimeAsync(0)
+    })
+
+    it('should clamp the label so a content server cannot grow the registry', () => {
+      expect(metricsMock.increment).toHaveBeenCalledWith('schedule_entity_deployment_attempt', {
+        entityType: 'other'
+      })
     })
   })
 

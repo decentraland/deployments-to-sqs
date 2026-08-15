@@ -19,7 +19,9 @@ export const configMock: jest.Mocked<IConfigComponent> = {
 }
 
 export const metricsMock: jest.Mocked<any> = {
-  increment: jest.fn()
+  increment: jest.fn(),
+  decrement: jest.fn(),
+  observe: jest.fn()
 }
 
 export const logsMock: jest.Mocked<ILoggerComponent> = {
