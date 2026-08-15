@@ -248,6 +248,53 @@ describe('DeployerComponent', () => {
     )
   })
 
+  describe('when the download queue itself rejects the scheduled job', () => {
+    // p-queue rejects the queue promise when the configured timeout elapses (createJobQueue sets
+    // throwOnTimeout whenever a timeout is given). The job body never sees it, so it can only be
+    // handled on the promise scheduleJob returns.
+    let queueError: Error
+    let unhandled: unknown[]
+    let onUnhandled: (reason: unknown) => void
+
+    beforeEach(async () => {
+      // Real timers here: detecting an unhandled rejection needs Node to actually turn the event
+      // loop, which the suite-wide fake timers prevent.
+      jest.useRealTimers()
+
+      queueError = new Error('Promise timed out')
+      unhandled = []
+      onUnhandled = (reason: unknown) => unhandled.push(reason)
+      process.on('unhandledRejection', onUnhandled)
+
+      storageMock.exist.mockResolvedValue(false)
+      downloadQueueMock.scheduleJob.mockRejectedValue(queueError)
+
+      const deployer = await createDeployerComponent(components)
+      await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+
+      // Let the rejection settle and give Node a turn to flag it if nothing handled it.
+      await new Promise((resolve) => setImmediate(resolve))
+    })
+
+    afterEach(() => {
+      process.off('unhandledRejection', onUnhandled)
+    })
+
+    it('should not leave an unhandled rejection', () => {
+      expect(unhandled).toEqual([])
+    })
+
+    it('should increment the queue failure metric', () => {
+      expect(metricsMock.increment).toHaveBeenCalledWith('entity_deployment_queue_failure', {
+        entityType: mockEntity.entityType
+      })
+    })
+
+    it('should not mark the entity as deployed, since the job may still be running', () => {
+      expect(mockEntity.markAsDeployed).not.toHaveBeenCalled()
+    })
+  })
+
   describe('when reporting whether the deployer is idle', () => {
     let deployer: IDeployerComponent
     let settled: boolean

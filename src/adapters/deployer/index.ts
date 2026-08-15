@@ -94,47 +94,68 @@ export async function createDeployerComponent(
 
         await components.downloadQueue.onSizeLessThan(1000)
 
-        void components.downloadQueue.scheduleJob(async () => {
-          try {
-            const metadata = await components.entityDownloader.downloadEntity(entity, servers)
+        // The promise below is the QUEUE's, not the job's. The job body handles its own errors, but
+        // p-queue rejects the queue promise on the configured timeout — createJobQueue sets
+        // `throwOnTimeout` whenever a timeout is given, and components.ts gives it 100s. Discarding
+        // it would leave an unhandled rejection, which this service's
+        // `--unhandled-rejections=strict --abort-on-uncaught-exception` start flags turn into an
+        // aborted process. Still deliberately not awaited: scheduling must stay non-blocking.
+        void components.downloadQueue
+          .scheduleJob(async () => {
+            try {
+              const metadata = await components.entityDownloader.downloadEntity(entity, servers)
 
-            await publishDeploymentNotifications({ ...entity, metadata }, servers)
-
-            await markAsDeployed()
-
-            components.metrics.increment('entity_deployment_success', {
-              entityType: entity.entityType
-            })
-          } catch (error: any) {
-            if (error instanceof EntityDownloadError) {
-              return
-            }
-
-            const isNotRetryable = /status: 4\d{2}/.test(error.message)
-
-            logger.error('Failed to publish entity', {
-              entityId: entity.entityId,
-              entityType: entity.entityType,
-              error: error?.message,
-              stack: error?.stack
-            })
-
-            components.metrics.increment('entity_deployment_failure', {
-              retryable: isNotRetryable ? 'false' : 'true',
-              entityType: entity.entityType
-            })
-
-            if (isNotRetryable) {
-              logger.error('Failed to download entity', {
-                entityId: entity.entityId,
-                entityType: entity.entityType,
-                error: error?.message
-              })
+              await publishDeploymentNotifications({ ...entity, metadata }, servers)
 
               await markAsDeployed()
+
+              components.metrics.increment('entity_deployment_success', {
+                entityType: entity.entityType
+              })
+            } catch (error: any) {
+              if (error instanceof EntityDownloadError) {
+                return
+              }
+
+              const isNotRetryable = /status: 4\d{2}/.test(error.message)
+
+              logger.error('Failed to publish entity', {
+                entityId: entity.entityId,
+                entityType: entity.entityType,
+                error: error?.message,
+                stack: error?.stack
+              })
+
+              components.metrics.increment('entity_deployment_failure', {
+                retryable: isNotRetryable ? 'false' : 'true',
+                entityType: entity.entityType
+              })
+
+              if (isNotRetryable) {
+                logger.error('Failed to download entity', {
+                  entityId: entity.entityId,
+                  entityType: entity.entityType,
+                  error: error?.message
+                })
+
+                await markAsDeployed()
+              }
             }
-          }
-        })
+          })
+          .catch((error: any) => {
+            // Observe only. A timed-out job is NOT cancelled — p-queue stops counting it while the
+            // function keeps running — so it may still finish and markAsDeployed. Marking or
+            // retrying from here would race that.
+            logger.error('Download queue rejected a scheduled deployment', {
+              entityId: entity.entityId,
+              entityType: entity.entityType,
+              error: error?.message
+            })
+
+            components.metrics.increment('entity_deployment_queue_failure', {
+              entityType: entity.entityType
+            })
+          })
       } catch (error: any) {
         logger.error('Failed to schedule entity deployment', {
           entityId: entity.entityId,
