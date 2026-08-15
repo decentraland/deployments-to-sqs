@@ -2,6 +2,7 @@ import { DeployableEntity, IDeployerComponent, TimeRange } from '@dcl/snapshots-
 import { AppComponents, EntityDownloadError, SnsPublisherComponent } from '../../types'
 import { isValidEntityId } from '../../logic/validation'
 import { toEntityTypeLabel } from '../../logic/entity-type-label'
+import { getPositiveInt } from '../../logic/tuning'
 
 export async function createDeployerComponent(
   components: Pick<
@@ -20,6 +21,9 @@ export async function createDeployerComponent(
   const logger = components.logs.getLogger('Deployer')
 
   const maxAgeInSeconds = parseInt((await components.config.getString('ENTITY_MAX_AGE_IN_SECONDS')) ?? '', 10)
+
+  // Blocks the stream, not just the queue: scheduleEntityDeployment is awaited per entity.
+  const maxPendingDeployments = await getPositiveInt(components.config, 'DOWNLOAD_QUEUE_MAX_PENDING', 1000)
 
   if (maxAgeInSeconds > 0) {
     logger.info('Entity age filter enabled', { maxAgeInSeconds })
@@ -96,7 +100,7 @@ export async function createDeployerComponent(
           return await markAsDeployed()
         }
 
-        await components.downloadQueue.onSizeLessThan(1000)
+        await components.downloadQueue.onSizeLessThan(maxPendingDeployments)
 
         // IJobQueue exposes no size/pending, so count the transitions here.
         components.metrics.increment('download_queue_size')

@@ -8,6 +8,7 @@ import { createLogComponent } from '@well-known-components/logger'
 import { createFetchComponent } from '@dcl/fetch-component'
 import { createMetricsComponent } from '@dcl/metrics'
 import { AppComponents, GlobalContext } from './types'
+import { getPositiveInt } from './logic/tuning'
 import { metricDeclarations } from './metrics'
 import {
   createJobQueue,
@@ -50,10 +51,19 @@ export async function initComponents(): Promise<AppComponents> {
 
   const storage = createResilientContentStorage({ logs }, rawStorage)
 
+  // Separate queues so `deployer.onIdle()` — awaited at every poll of every server — drains only
+  // the deployer's work, and /snapshots fetches never queue behind an entity backlog.
   const downloadQueue = createJobQueue({
     autoStart: true,
-    concurrency: 5,
-    timeout: 100000
+    concurrency: await getPositiveInt(config, 'DOWNLOAD_QUEUE_CONCURRENCY', 15),
+    timeout: await getPositiveInt(config, 'DOWNLOAD_QUEUE_TIMEOUT_MS', 100000)
+  })
+
+  // Sized for snapshotDeployments (default 10) plus the per-server /snapshots fetches.
+  const synchronizerQueue = createJobQueue({
+    autoStart: true,
+    concurrency: await getPositiveInt(config, 'SYNCHRONIZER_QUEUE_CONCURRENCY', 10),
+    timeout: await getPositiveInt(config, 'SYNCHRONIZER_QUEUE_TIMEOUT_MS', 100000)
   })
 
   const snsPublisher = await createSnsDeploymentPublisherComponent({ config, logs, metrics })
@@ -102,7 +112,7 @@ export async function initComponents(): Promise<AppComponents> {
   const synchronizer = await createSynchronizer(
     {
       logs,
-      downloadQueue,
+      downloadQueue: synchronizerQueue,
       fetcher: fetch,
       metrics,
       deployer,
@@ -146,6 +156,7 @@ export async function initComponents(): Promise<AppComponents> {
     storage,
     fs,
     downloadQueue,
+    synchronizerQueue,
     synchronizer,
     deployer,
     snsPublisher,

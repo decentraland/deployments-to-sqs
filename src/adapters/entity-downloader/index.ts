@@ -1,6 +1,7 @@
 import { ContentMapping, DeployableEntity, downloadEntityAndContentFiles } from '@dcl/snapshots-fetcher'
 import { AppComponents, EntityDownloaderComponent, EntityDownloadError } from '../../types'
 import { toEntityTypeLabel } from '../../logic/entity-type-label'
+import { getPositiveInt } from '../../logic/tuning'
 
 export async function createEntityDownloaderComponent(
   components: Pick<AppComponents, 'config' | 'logs' | 'storage' | 'fetch' | 'metrics'>
@@ -8,6 +9,10 @@ export async function createEntityDownloaderComponent(
   const logger = components.logs.getLogger('EntityDownloader')
   const maxRetries: number = (await components.config.getNumber('MAX_RETRIES')) || 10
   const waitTimeBetweenRetries: number = (await components.config.getNumber('WAIT_TIME_BETWEEN_RETRIES')) || 1000
+
+  // Per entity, and there is no global bound, so the in-flight ceiling is
+  // DOWNLOAD_QUEUE_CONCURRENCY x this. Lowered from the library default of 10.
+  const contentFilesConcurrency = await getPositiveInt(components.config, 'CONTENT_FILES_CONCURRENCY', 4)
 
   return {
     async downloadEntity(entity: DeployableEntity, servers: string[]): Promise<any> {
@@ -28,7 +33,8 @@ export async function createEntityDownloaderComponent(
           new Map(),
           'content',
           maxRetries,
-          waitTimeBetweenRetries
+          waitTimeBetweenRetries,
+          contentFilesConcurrency
         )) as {
           type: string
           metadata?: any
