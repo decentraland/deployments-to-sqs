@@ -82,7 +82,17 @@ export function createResilientContentStorage(
   // would auto-forward future members but drop the `this` binding — we
   // prefer the explicit list, and TypeScript will fail the build if
   // `IContentStorageComponent` grows a required method.
+  //
+  // The lifecycle hooks below are the exception TypeScript will NOT catch:
+  // `IBaseComponent`'s members are all optional, so omitting them compiles
+  // clean while silently skipping the backend's own startup/shutdown work
+  // (catalyst-storage v5's folder backend replays its crash-recovery journal
+  // in `start()`). They are forwarded conditionally because the S3 backend
+  // implements only `stop()`, and a defined-but-undefined key would still
+  // read as "implemented" to the lifecycle runner.
   return {
+    ...(inner.start && { start: inner.start.bind(inner) }),
+    ...(inner.stop && { stop: inner.stop.bind(inner) }),
     storeStream: inner.storeStream.bind(inner),
     storeStreamAndCompress: inner.storeStreamAndCompress.bind(inner),
     delete: inner.delete.bind(inner),
@@ -92,8 +102,8 @@ export function createResilientContentStorage(
     existMultiple: inner.existMultiple.bind(inner),
     allFileIds: inner.allFileIds.bind(inner),
 
-    async retrieve(fileId: string): Promise<ContentItem | undefined> {
-      const item = await inner.retrieve(fileId)
+    async retrieve(fileId: string, range?: { start: number; end: number }): Promise<ContentItem | undefined> {
+      const item = await inner.retrieve(fileId, range)
       if (!item) {
         return item
       }
@@ -101,6 +111,7 @@ export function createResilientContentStorage(
       return {
         encoding: item.encoding,
         size: item.size,
+        contentSize: item.contentSize,
         // `asRawStream` is intentionally forwarded unwrapped. It returns the
         // raw (potentially compressed) S3 body and is not used by any code
         // path in this repo; snapshot-fetcher only calls `asStream`. If a

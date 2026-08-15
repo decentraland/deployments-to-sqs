@@ -68,6 +68,7 @@ describe('ResilientContentStorage', () => {
         innerItem = {
           encoding: null,
           size: 11,
+          contentSize: 11,
           asStream: jest.fn().mockResolvedValue(Readable.from(Buffer.from('hello world'))),
           asRawStream: jest.fn()
         }
@@ -118,6 +119,7 @@ describe('ResilientContentStorage', () => {
         innerItem = {
           encoding: null,
           size: 12,
+          contentSize: 12,
           asStream: jest.fn().mockResolvedValue(sourceStream),
           asRawStream: jest.fn()
         }
@@ -152,6 +154,7 @@ describe('ResilientContentStorage', () => {
         innerItem = {
           encoding: null,
           size: 100,
+          contentSize: 100,
           asStream: jest.fn().mockResolvedValue(erroringStream),
           asRawStream: jest.fn()
         }

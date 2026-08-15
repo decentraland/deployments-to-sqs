@@ -1,4 +1,4 @@
-import { DeployableEntity, IDeployerComponent, TimeRange } from '@dcl/snapshots-fetcher/dist/types'
+import { DeployableEntity, IDeployerComponent, TimeRange } from '@dcl/snapshots-fetcher'
 import { AppComponents, EntityDownloadError, SnsPublisherComponent } from '../../types'
 import { isValidEntityId } from '../../logic/validation'
 
@@ -148,7 +148,13 @@ export async function createDeployerComponent(
         })
       }
     },
-    async onIdle() {},
+    // The drain signal, not a formality: snapshots-fetcher awaits this before it advances a
+    // server's pointer-changes timestamp, before it commits bootstrap marks, and inside stop().
+    // scheduleEntityDeployment returns as soon as the job is queued, so reporting idle while the
+    // queue still holds work would let sync resume past entities that were only ever scheduled.
+    async onIdle() {
+      await components.downloadQueue.onIdle()
+    },
     async prepareForDeploymentsIn(_timeRanges: TimeRange[]) {}
   }
 }

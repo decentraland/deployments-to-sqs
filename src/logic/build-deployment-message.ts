@@ -1,4 +1,4 @@
-import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
+import { DeployableEntity } from '@dcl/snapshots-fetcher'
 import { DeploymentToSqs } from '@dcl/schemas/dist/misc/deployments-to-sqs'
 import { SnsType } from '../adapters/sns/types'
 import { Events } from '@dcl/schemas/dist/platform/events'

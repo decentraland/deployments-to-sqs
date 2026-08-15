@@ -1,7 +1,8 @@
 import { IContentStorageComponent } from '@dcl/catalyst-storage'
-import { IConfigComponent, IFetchComponent, ILoggerComponent } from '@well-known-components/interfaces'
+import { IFetchComponent } from '@dcl/core-commons'
+import { IConfigComponent, ILoggerComponent } from '@well-known-components/interfaces'
 import { EntityDownloaderComponent, SnsPublisherComponent } from '../../src/types'
-import { IJobQueue } from '@dcl/snapshots-fetcher/dist/job-queue-port'
+import { IJobQueue } from '@dcl/snapshots-fetcher'
 
 export const configMock: jest.Mocked<IConfigComponent> = {
   getNumber: jest.fn().mockResolvedValue(''),

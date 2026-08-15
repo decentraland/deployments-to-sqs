@@ -1,4 +1,4 @@
-import { Router } from '@well-known-components/http-server'
+import { Router } from '@dcl/http-server'
 import { GlobalContext } from '../types'
 import { pingHandler } from './handlers/ping-handler'
 

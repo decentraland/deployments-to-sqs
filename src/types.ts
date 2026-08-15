@@ -1,10 +1,8 @@
-import { IJobQueue } from '@dcl/snapshots-fetcher/dist/job-queue-port'
-import { DeployableEntity, IDeployerComponent, SynchronizerComponent } from '@dcl/snapshots-fetcher/dist/types'
-import type { IFetchComponent } from '@well-known-components/http-server'
+import { DeployableEntity, IDeployerComponent, IJobQueue, SynchronizerComponent } from '@dcl/snapshots-fetcher'
+import type { IFetchComponent, IHttpServerComponent } from '@dcl/core-commons'
 import type {
   IConfigComponent,
   ILoggerComponent,
-  IHttpServerComponent,
   IBaseComponent,
   IMetricsComponent
 } from '@well-known-components/interfaces'
@@ -37,7 +35,8 @@ export type SnsPublisherComponent = {
 }
 
 export type EntityDownloaderComponent = {
-  downloadEntity: (entity: DeployableEntity, contentServerUrls: string[]) => Promise<void>
+  /** Resolves to the downloaded entity's `metadata`, which the deployer forwards to the publishers. */
+  downloadEntity: (entity: DeployableEntity, contentServerUrls: string[]) => Promise<unknown>
 }
 
 // components used in runtime

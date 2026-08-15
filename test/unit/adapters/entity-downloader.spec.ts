@@ -2,7 +2,7 @@ import { downloadEntityAndContentFiles } from '@dcl/snapshots-fetcher'
 import { AppComponents, EntityDownloadError } from '../../../src/types'
 import { createEntityDownloaderComponent } from '../../../src/adapters/entity-downloader'
 import { configMock, fetcherMock, logsMock, metricsMock, storageMock } from '../../mocks/components'
-import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
+import { DeployableEntity } from '@dcl/snapshots-fetcher'
 
 jest.mock('@dcl/snapshots-fetcher', () => ({
   downloadEntityAndContentFiles: jest.fn()

@@ -1,7 +1,7 @@
 import { Events } from '@dcl/schemas/dist/platform/events'
 import { AppComponents, SnsPublisherComponent, SnsPublishError } from '../../types'
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns'
-import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
+import { DeployableEntity } from '@dcl/snapshots-fetcher'
 import { SnsOptions, SnsType } from './types'
 import { buildDeploymentMessage } from '../../logic/build-deployment-message'
 

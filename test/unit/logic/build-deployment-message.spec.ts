@@ -1,4 +1,4 @@
-import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
+import { DeployableEntity } from '@dcl/snapshots-fetcher'
 import { Events } from '@dcl/schemas/dist/platform/events'
 import { buildDeploymentMessage } from '../../../src/logic/build-deployment-message'
 import { SnsType } from '../../../src/adapters/sns/types'

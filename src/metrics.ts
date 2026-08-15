@@ -1,7 +1,8 @@
 import { metricsDefinitions } from '@dcl/snapshots-fetcher'
+import { getDefaultHttpMetrics } from '@dcl/http-server'
+import { validateMetricsDeclaration } from '@dcl/metrics'
 import { IMetricsComponent } from '@well-known-components/interfaces'
 import { metricDeclarations as logMetricDeclarations } from '@well-known-components/logger'
-import { validateMetricsDeclaration, getDefaultHttpMetrics } from '@well-known-components/metrics'
 
 export const metricDeclarations = {
   ...getDefaultHttpMetrics(),

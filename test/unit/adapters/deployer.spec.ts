@@ -10,7 +10,7 @@ import {
   entityDownloaderMock,
   downloadQueueMock
 } from '../../mocks/components'
-import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
+import { DeployableEntity, IDeployerComponent } from '@dcl/snapshots-fetcher'
 
 describe('DeployerComponent', () => {
   let components: jest.Mocked<
@@ -111,7 +111,7 @@ describe('DeployerComponent', () => {
 
   it('should successfully deploy a new entity', async () => {
     storageMock.exist.mockResolvedValue(false)
-    entityDownloaderMock.downloadEntity.mockResolvedValue()
+    entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
     snsPublisherMock.publishMessage.mockResolvedValue()
 
     const deployer = await createDeployerComponent(components)
@@ -196,7 +196,7 @@ describe('DeployerComponent', () => {
       const maxAgeInSeconds = 3600
       configMock.getString.mockResolvedValue(String(maxAgeInSeconds))
       storageMock.exist.mockResolvedValue(false)
-      entityDownloaderMock.downloadEntity.mockResolvedValue()
+      entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
       snsPublisherMock.publishMessage.mockResolvedValue()
 
       const deployer = await createDeployerComponent(components)
@@ -213,7 +213,7 @@ describe('DeployerComponent', () => {
       const maxAgeInSeconds = 3600
       configMock.getString.mockResolvedValue(String(maxAgeInSeconds))
       storageMock.exist.mockResolvedValue(false)
-      entityDownloaderMock.downloadEntity.mockResolvedValue()
+      entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
       snsPublisherMock.publishMessage.mockResolvedValue()
       const boundaryEntity = { ...mockEntity, entityTimestamp: Date.now() - maxAgeInSeconds * 1000 }
 
@@ -232,7 +232,7 @@ describe('DeployerComponent', () => {
       async (configValue) => {
         configMock.getString.mockResolvedValue(configValue)
         storageMock.exist.mockResolvedValue(false)
-        entityDownloaderMock.downloadEntity.mockResolvedValue()
+        entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
         snsPublisherMock.publishMessage.mockResolvedValue()
         const oldTimestamp = Date.now() - 10 * 365 * 24 * 3600 * 1000
         const oldEntity = { ...mockEntity, entityTimestamp: oldTimestamp }
@@ -246,5 +246,52 @@ describe('DeployerComponent', () => {
         expect(entityDownloaderMock.downloadEntity).toHaveBeenCalledWith(oldEntity, mockServers)
       }
     )
+  })
+
+  describe('when reporting whether the deployer is idle', () => {
+    let deployer: IDeployerComponent
+    let settled: boolean
+    let releaseQueue: () => void
+
+    beforeEach(async () => {
+      settled = false
+      deployer = await createDeployerComponent(components)
+      downloadQueueMock.onIdle.mockReturnValue(
+        new Promise<void>((resolve) => {
+          releaseQueue = resolve
+        })
+      )
+    })
+
+    describe('and the download queue still holds scheduled work', () => {
+      beforeEach(async () => {
+        void deployer.onIdle().then(() => {
+          settled = true
+        })
+        await Promise.resolve()
+      })
+
+      it('should not report idle', () => {
+        expect(settled).toBe(false)
+      })
+    })
+
+    describe('and the download queue has drained', () => {
+      beforeEach(async () => {
+        void deployer.onIdle().then(() => {
+          settled = true
+        })
+        releaseQueue()
+        await Promise.resolve()
+      })
+
+      it('should report idle', () => {
+        expect(settled).toBe(true)
+      })
+
+      it('should delegate the drain to the download queue', () => {
+        expect(downloadQueueMock.onIdle).toHaveBeenCalled()
+      })
+    })
   })
 })
