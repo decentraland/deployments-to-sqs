@@ -19,7 +19,10 @@ export type BaseComponents = {
   logs: ILoggerComponent
   server: IHttpServerComponent<GlobalContext>
   fetch: IFetchComponent
+  /** Entity downloads; what `deployer.onIdle()` drains. */
   downloadQueue: IJobQueue
+  /** The synchronizer's control plane, kept off the entity queue. */
+  synchronizerQueue: IJobQueue
   metrics: IMetricsComponent<keyof typeof metricDeclarations>
   fs: IFileSystemComponent
   storage: IContentStorageComponent

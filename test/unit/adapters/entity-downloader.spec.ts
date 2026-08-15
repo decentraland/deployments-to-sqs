@@ -57,7 +57,8 @@ describe('EntityDownloaderComponent', () => {
       new Map(),
       'content',
       10,
-      1000
+      1000,
+      4
     )
     expect(metricsMock.increment).toHaveBeenCalledWith('entity_download_success', {
       entityType: mockEntity.entityType

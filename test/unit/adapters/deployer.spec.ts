@@ -28,13 +28,20 @@ describe('DeployerComponent', () => {
     >
   >
 
+  // The deployer reads several string knobs. Scope the value under test to its own key so it does
+  // not also land on DOWNLOAD_QUEUE_MAX_PENDING, which rejects non-positive-integer values.
+  const setEntityMaxAge = (value: string) =>
+    configMock.getString.mockImplementation(async (key: string) =>
+      key === 'ENTITY_MAX_AGE_IN_SECONDS' ? value : undefined
+    )
+
   let mockEntity: DeployableEntity
   let mockServers: string[]
 
   beforeEach(() => {
     downloadQueueMock.onSizeLessThan.mockResolvedValue()
     downloadQueueMock.scheduleJob.mockImplementation(async (fn) => await fn())
-    configMock.getString.mockResolvedValue('')
+    setEntityMaxAge('')
 
     components = {
       config: configMock,
@@ -177,7 +184,7 @@ describe('DeployerComponent', () => {
   describe('entity age filter', () => {
     it('should skip and mark as deployed entities older than the configured max age', async () => {
       const maxAgeInSeconds = 3600
-      configMock.getString.mockResolvedValue(String(maxAgeInSeconds))
+      setEntityMaxAge(String(maxAgeInSeconds))
       const oldTimestamp = Date.now() - (maxAgeInSeconds + 1) * 1000
       const oldEntity = { ...mockEntity, entityTimestamp: oldTimestamp }
 
@@ -195,7 +202,7 @@ describe('DeployerComponent', () => {
 
     it('should process recent entities normally when the age filter is enabled', async () => {
       const maxAgeInSeconds = 3600
-      configMock.getString.mockResolvedValue(String(maxAgeInSeconds))
+      setEntityMaxAge(String(maxAgeInSeconds))
       storageMock.exist.mockResolvedValue(false)
       entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
       snsPublisherMock.publishMessage.mockResolvedValue()
@@ -212,7 +219,7 @@ describe('DeployerComponent', () => {
 
     it('should not skip an entity aged exactly at the threshold', async () => {
       const maxAgeInSeconds = 3600
-      configMock.getString.mockResolvedValue(String(maxAgeInSeconds))
+      setEntityMaxAge(String(maxAgeInSeconds))
       storageMock.exist.mockResolvedValue(false)
       entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
       snsPublisherMock.publishMessage.mockResolvedValue()
@@ -231,7 +238,7 @@ describe('DeployerComponent', () => {
     it.each(['', '0', 'abc', '-3600'])(
       'should process all entities when config is "%s" (filter disabled)',
       async (configValue) => {
-        configMock.getString.mockResolvedValue(configValue)
+        setEntityMaxAge(configValue)
         storageMock.exist.mockResolvedValue(false)
         entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
         snsPublisherMock.publishMessage.mockResolvedValue()
