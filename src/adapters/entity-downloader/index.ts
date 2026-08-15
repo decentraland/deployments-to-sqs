@@ -1,5 +1,6 @@
 import { ContentMapping, DeployableEntity, downloadEntityAndContentFiles } from '@dcl/snapshots-fetcher'
 import { AppComponents, EntityDownloaderComponent, EntityDownloadError } from '../../types'
+import { toEntityTypeLabel } from '../../logic/entity-type-label'
 
 export async function createEntityDownloaderComponent(
   components: Pick<AppComponents, 'config' | 'logs' | 'storage' | 'fetch' | 'metrics'>
@@ -11,6 +12,7 @@ export async function createEntityDownloaderComponent(
   return {
     async downloadEntity(entity: DeployableEntity, servers: string[]): Promise<any> {
       const markAsDeployed = entity.markAsDeployed || (async () => {})
+      const entityTypeLabel = toEntityTypeLabel(entity.entityType)
 
       logger.info('Downloading entity', {
         entityId: entity.entityId,
@@ -33,7 +35,7 @@ export async function createEntityDownloaderComponent(
           content?: ContentMapping[]
         }
 
-        components.metrics.increment('entity_download_success', { entityType: entity.entityType })
+        components.metrics.increment('entity_download_success', { entityType: entityTypeLabel })
         logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
         return metadata
       } catch (error: any) {
@@ -43,9 +45,12 @@ export async function createEntityDownloaderComponent(
           errorMessage: error.message
         })
 
-        components.metrics.increment('entity_download_failure', { entityType: entity.entityType })
-
         const isNonRetryable = error.message?.match(/status: 4\d{2}/)
+
+        components.metrics.increment('entity_download_failure', {
+          entityType: entityTypeLabel,
+          retryable: isNonRetryable ? 'false' : 'true'
+        })
 
         if (isNonRetryable) {
           await markAsDeployed()

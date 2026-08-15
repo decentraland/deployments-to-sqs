@@ -53,6 +53,14 @@ export const metricDeclarations = {
     type: IMetricsComponent.CounterType,
     labelNames: ['entityType', 'retryable']
   },
+  download_queue_size: {
+    help: 'Deployment jobs queued but not started. Counts jobs, not distinct entities.',
+    type: IMetricsComponent.GaugeType
+  },
+  download_queue_pending: {
+    help: 'Deployment jobs currently executing. Persistently at the queue concurrency means saturated.',
+    type: IMetricsComponent.GaugeType
+  },
   entity_deployment_queue_failure: {
     help: 'Count deployments whose download-queue promise rejected (e.g. the queue timeout elapsed). Counted separately from entity_deployment_failure because a timed-out job keeps running and may still succeed.',
     type: IMetricsComponent.CounterType,

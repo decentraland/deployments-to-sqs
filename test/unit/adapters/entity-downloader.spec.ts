@@ -72,7 +72,8 @@ describe('EntityDownloaderComponent', () => {
     await expect(downloader.downloadEntity(mockEntity, mockServers)).rejects.toThrow(EntityDownloadError)
 
     expect(metricsMock.increment).toHaveBeenCalledWith('entity_download_failure', {
-      entityType: mockEntity.entityType
+      entityType: mockEntity.entityType,
+      retryable: 'true'
     })
     expect(mockEntity.markAsDeployed).not.toHaveBeenCalled()
   })
@@ -85,7 +86,8 @@ describe('EntityDownloaderComponent', () => {
       await expect(downloader.downloadEntity(mockEntity, mockServers)).rejects.toThrow(EntityDownloadError)
 
       expect(metricsMock.increment).toHaveBeenCalledWith('entity_download_failure', {
-        entityType: mockEntity.entityType
+        entityType: mockEntity.entityType,
+        retryable: 'false'
       })
       expect(mockEntity.markAsDeployed).toHaveBeenCalled()
     })
@@ -101,7 +103,8 @@ describe('EntityDownloaderComponent', () => {
       )
 
       expect(metricsMock.increment).toHaveBeenCalledWith('entity_download_failure', {
-        entityType: mockEntity.entityType
+        entityType: mockEntity.entityType,
+        retryable: 'false'
       })
     })
   })
