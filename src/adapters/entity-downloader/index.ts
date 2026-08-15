@@ -1,5 +1,4 @@
-import { downloadEntityAndContentFiles } from '@dcl/snapshots-fetcher'
-import { ContentMapping, DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
+import { ContentMapping, DeployableEntity, downloadEntityAndContentFiles } from '@dcl/snapshots-fetcher'
 import { AppComponents, EntityDownloaderComponent, EntityDownloadError } from '../../types'
 
 export async function createEntityDownloaderComponent(

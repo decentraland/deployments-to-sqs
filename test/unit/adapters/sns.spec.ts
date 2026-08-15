@@ -1,5 +1,5 @@
 import { SNSClient } from '@aws-sdk/client-sns'
-import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
+import { DeployableEntity } from '@dcl/snapshots-fetcher'
 import {
   createSnsDeploymentPublisherComponent,
   createSnsEventPublisherComponent,

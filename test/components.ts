@@ -1,12 +1,12 @@
 // This file is the "test-environment" analogous for src/components.ts
 // Here we define the test components to be used in the testing environment
 
-import { createRunner, createLocalFetchCompoment } from '@well-known-components/test-helpers'
+import { createRunner, createLocalFetchComponent } from '@dcl/test-helpers'
 
 import { main } from '../src/service'
 import { TestComponents } from '../src/types'
 import { initComponents as originalInitComponents } from '../src/components'
-import { createInMemoryStorage } from '@dcl/catalyst-storage/dist/in-memory-storage-component'
+import { createInMemoryStorage } from '@dcl/catalyst-storage'
 import { configMock, metricsMock } from './mocks/components'
 
 /**
@@ -31,7 +31,7 @@ async function initComponents(): Promise<TestComponents> {
   return {
     ...components,
     storage,
-    localFetch: await createLocalFetchCompoment(config),
+    localFetch: await createLocalFetchComponent(config),
     config: configMock,
     metrics: metricsMock,
     // Stub the synchronizer so `main()` doesn't kick off a real catalyst sync

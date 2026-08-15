@@ -1,7 +1,8 @@
 import { metricsDefinitions } from '@dcl/snapshots-fetcher'
+import { getDefaultHttpMetrics } from '@dcl/http-server'
+import { validateMetricsDeclaration } from '@dcl/metrics'
 import { IMetricsComponent } from '@well-known-components/interfaces'
 import { metricDeclarations as logMetricDeclarations } from '@well-known-components/logger'
-import { validateMetricsDeclaration, getDefaultHttpMetrics } from '@well-known-components/metrics'
 
 export const metricDeclarations = {
   ...getDefaultHttpMetrics(),
@@ -51,6 +52,11 @@ export const metricDeclarations = {
     help: 'Count failed entity deployments',
     type: IMetricsComponent.CounterType,
     labelNames: ['entityType', 'retryable']
+  },
+  entity_deployment_queue_failure: {
+    help: 'Count deployments whose download-queue promise rejected (e.g. the queue timeout elapsed). Counted separately from entity_deployment_failure because a timed-out job keeps running and may still succeed.',
+    type: IMetricsComponent.CounterType,
+    labelNames: ['entityType']
   },
   entity_skipped_old: {
     help: 'Count entities skipped because they are older than the configured max age',

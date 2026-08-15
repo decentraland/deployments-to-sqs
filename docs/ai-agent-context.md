@@ -17,11 +17,12 @@
 
 **Technology Stack:**
 
-- Runtime: Node.js
-- Language: TypeScript 4.x
-- HTTP Framework: @well-known-components/http-server
+- Runtime: Node.js 24
+- Language: TypeScript 5.x
+- HTTP Framework: @dcl/http-server
 - Queue/Events: AWS SNS (event publishing)
-- Component Architecture: @well-known-components (logger, metrics, http-server, env-config-provider)
+- Component Architecture: @dcl core-components (http-server, metrics, fetch-component, core-commons),
+  with @well-known-components still supplying logger, env-config-provider and interfaces
 
 **External Dependencies:**
 

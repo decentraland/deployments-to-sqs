@@ -9,6 +9,7 @@
     "experimentalDecorators": true,
     "pretty": true,
     "esModuleInterop": true,
+    "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noImplicitReturns": true,
     "noImplicitAny": true,

@@ -1,13 +1,20 @@
 import { createDotEnvConfigComponent } from '@well-known-components/env-config-provider'
-import { createServerComponent, createStatusCheckComponent } from '@well-known-components/http-server'
+import {
+  createServerComponent,
+  createStatusCheckComponent,
+  instrumentHttpServerWithPromClientRegistry
+} from '@dcl/http-server'
 import { createLogComponent } from '@well-known-components/logger'
-import { createFetchComponent } from './adapters/fetch'
-import { createMetricsComponent, instrumentHttpServerWithMetrics } from '@well-known-components/metrics'
+import { createFetchComponent } from '@dcl/fetch-component'
+import { createMetricsComponent } from '@dcl/metrics'
 import { AppComponents, GlobalContext } from './types'
 import { metricDeclarations } from './metrics'
-import { createJobQueue } from '@dcl/snapshots-fetcher/dist/job-queue-port'
-import { createSynchronizer } from '@dcl/snapshots-fetcher'
-import { ISnapshotStorageComponent, IProcessedSnapshotStorageComponent } from '@dcl/snapshots-fetcher/dist/types'
+import {
+  createJobQueue,
+  createSynchronizer,
+  ISnapshotStorageComponent,
+  IProcessedSnapshotStorageComponent
+} from '@dcl/snapshots-fetcher'
 import { createDeployerComponent } from './adapters/deployer'
 import {
   createAwsS3BasedFileSystemContentStorage,
@@ -27,9 +34,9 @@ export async function initComponents(): Promise<AppComponents> {
   const logs = await createLogComponent({ metrics })
   const server = await createServerComponent<GlobalContext>({ config, logs }, {})
   const statusChecks = await createStatusCheckComponent({ server, config })
-  const fetch = await createFetchComponent()
+  const fetch = createFetchComponent()
 
-  await instrumentHttpServerWithMetrics({ config, metrics, server })
+  await instrumentHttpServerWithPromClientRegistry({ config, metrics, server, registry: metrics.registry! })
 
   const fs = createFsComponent()
 

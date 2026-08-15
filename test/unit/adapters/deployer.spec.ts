@@ -10,7 +10,7 @@ import {
   entityDownloaderMock,
   downloadQueueMock
 } from '../../mocks/components'
-import { DeployableEntity } from '@dcl/snapshots-fetcher/dist/types'
+import { DeployableEntity, IDeployerComponent } from '@dcl/snapshots-fetcher'
 
 describe('DeployerComponent', () => {
   let components: jest.Mocked<
@@ -111,7 +111,7 @@ describe('DeployerComponent', () => {
 
   it('should successfully deploy a new entity', async () => {
     storageMock.exist.mockResolvedValue(false)
-    entityDownloaderMock.downloadEntity.mockResolvedValue()
+    entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
     snsPublisherMock.publishMessage.mockResolvedValue()
 
     const deployer = await createDeployerComponent(components)
@@ -196,7 +196,7 @@ describe('DeployerComponent', () => {
       const maxAgeInSeconds = 3600
       configMock.getString.mockResolvedValue(String(maxAgeInSeconds))
       storageMock.exist.mockResolvedValue(false)
-      entityDownloaderMock.downloadEntity.mockResolvedValue()
+      entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
       snsPublisherMock.publishMessage.mockResolvedValue()
 
       const deployer = await createDeployerComponent(components)
@@ -213,7 +213,7 @@ describe('DeployerComponent', () => {
       const maxAgeInSeconds = 3600
       configMock.getString.mockResolvedValue(String(maxAgeInSeconds))
       storageMock.exist.mockResolvedValue(false)
-      entityDownloaderMock.downloadEntity.mockResolvedValue()
+      entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
       snsPublisherMock.publishMessage.mockResolvedValue()
       const boundaryEntity = { ...mockEntity, entityTimestamp: Date.now() - maxAgeInSeconds * 1000 }
 
@@ -232,7 +232,7 @@ describe('DeployerComponent', () => {
       async (configValue) => {
         configMock.getString.mockResolvedValue(configValue)
         storageMock.exist.mockResolvedValue(false)
-        entityDownloaderMock.downloadEntity.mockResolvedValue()
+        entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
         snsPublisherMock.publishMessage.mockResolvedValue()
         const oldTimestamp = Date.now() - 10 * 365 * 24 * 3600 * 1000
         const oldEntity = { ...mockEntity, entityTimestamp: oldTimestamp }
@@ -246,5 +246,99 @@ describe('DeployerComponent', () => {
         expect(entityDownloaderMock.downloadEntity).toHaveBeenCalledWith(oldEntity, mockServers)
       }
     )
+  })
+
+  describe('when the download queue itself rejects the scheduled job', () => {
+    // p-queue rejects the queue promise when the configured timeout elapses (createJobQueue sets
+    // throwOnTimeout whenever a timeout is given). The job body never sees it, so it can only be
+    // handled on the promise scheduleJob returns.
+    let queueError: Error
+    let unhandled: unknown[]
+    let onUnhandled: (reason: unknown) => void
+
+    beforeEach(async () => {
+      // Real timers here: detecting an unhandled rejection needs Node to actually turn the event
+      // loop, which the suite-wide fake timers prevent.
+      jest.useRealTimers()
+
+      queueError = new Error('Promise timed out')
+      unhandled = []
+      onUnhandled = (reason: unknown) => unhandled.push(reason)
+      process.on('unhandledRejection', onUnhandled)
+
+      storageMock.exist.mockResolvedValue(false)
+      downloadQueueMock.scheduleJob.mockRejectedValue(queueError)
+
+      const deployer = await createDeployerComponent(components)
+      await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+
+      // Let the rejection settle and give Node a turn to flag it if nothing handled it.
+      await new Promise((resolve) => setImmediate(resolve))
+    })
+
+    afterEach(() => {
+      process.off('unhandledRejection', onUnhandled)
+    })
+
+    it('should not leave an unhandled rejection', () => {
+      expect(unhandled).toEqual([])
+    })
+
+    it('should increment the queue failure metric', () => {
+      expect(metricsMock.increment).toHaveBeenCalledWith('entity_deployment_queue_failure', {
+        entityType: mockEntity.entityType
+      })
+    })
+
+    it('should not mark the entity as deployed, since the job may still be running', () => {
+      expect(mockEntity.markAsDeployed).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('when reporting whether the deployer is idle', () => {
+    let deployer: IDeployerComponent
+    let settled: boolean
+    let releaseQueue: () => void
+
+    beforeEach(async () => {
+      settled = false
+      deployer = await createDeployerComponent(components)
+      downloadQueueMock.onIdle.mockReturnValue(
+        new Promise<void>((resolve) => {
+          releaseQueue = resolve
+        })
+      )
+    })
+
+    describe('and the download queue still holds scheduled work', () => {
+      beforeEach(async () => {
+        void deployer.onIdle().then(() => {
+          settled = true
+        })
+        await Promise.resolve()
+      })
+
+      it('should not report idle', () => {
+        expect(settled).toBe(false)
+      })
+    })
+
+    describe('and the download queue has drained', () => {
+      beforeEach(async () => {
+        void deployer.onIdle().then(() => {
+          settled = true
+        })
+        releaseQueue()
+        await Promise.resolve()
+      })
+
+      it('should report idle', () => {
+        expect(settled).toBe(true)
+      })
+
+      it('should delegate the drain to the download queue', () => {
+        expect(downloadQueueMock.onIdle).toHaveBeenCalled()
+      })
+    })
   })
 })

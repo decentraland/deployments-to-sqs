@@ -1,6 +1,6 @@
 ARG RUN
 
-FROM node:24-alpine@sha256:5fa278c599dbba0c8f873d8717d50ecbb57c5ae6a53b7ab240c25135e0b65995 as builderenv
+FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43 as builderenv
 
 WORKDIR /app
 
@@ -22,7 +22,7 @@ RUN yarn install --frozen-lockfile --production
 
 ########################## END OF BUILD STAGE ##########################
 
-FROM node:24-alpine@sha256:5fa278c599dbba0c8f873d8717d50ecbb57c5ae6a53b7ab240c25135e0b65995
+FROM node:24-alpine@sha256:d32cdf619f63fe0471182d08996dd516c6275bb5fd31ae06e55a570bd9e1ad43
 
 # NODE_ENV is used to configure some runtime options, like JSON logger
 ENV NODE_ENV production
