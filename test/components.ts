@@ -7,7 +7,7 @@ import { main } from '../src/service'
 import { TestComponents } from '../src/types'
 import { initComponents as originalInitComponents } from '../src/components'
 import { createInMemoryStorage } from '@dcl/catalyst-storage'
-import { configMock, metricsMock } from './mocks/components'
+import { configMock, metricsMock, pgMock, processedRegistryMock } from './mocks/components'
 
 /**
  * Behaves like Jest "describe" function, used to describe a test for a
@@ -37,6 +37,10 @@ async function initComponents(): Promise<TestComponents> {
     // Stub the synchronizer so `main()` doesn't kick off a real catalyst sync
     // during tests (CONTENT_SERVER_URLS now resolves to a real allowlisted host
     // to satisfy the startup allowlist guard).
-    synchronizer: { syncWithServers: jest.fn().mockResolvedValue({}) } as any
+    synchronizer: { syncWithServers: jest.fn().mockResolvedValue({}) } as any,
+    // Stubbed so the suite needs no database: the real component would connect and
+    // run migrations on start. Registry behaviour is covered by its own unit tests.
+    pg: pgMock,
+    processedRegistry: processedRegistryMock
   }
 }

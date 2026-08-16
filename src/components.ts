@@ -7,6 +7,8 @@ import {
 import { createLogComponent } from '@well-known-components/logger'
 import { createFetchComponent } from '@dcl/fetch-component'
 import { createMetricsComponent } from '@dcl/metrics'
+import { createPgComponent } from '@dcl/pg-component'
+import { resolve } from 'path'
 import { AppComponents, GlobalContext } from './types'
 import { getPositiveInt } from './logic/tuning'
 import { metricDeclarations } from './metrics'
@@ -22,10 +24,10 @@ import {
   createFolderBasedFileSystemContentStorage,
   createFsComponent
 } from '@dcl/catalyst-storage'
-import { Readable } from 'stream'
 import { createEntityDownloaderComponent } from './adapters/entity-downloader'
 import { createSnsDeploymentPublisherComponent, createSnsEventPublisherComponent } from './adapters/sns'
 import { createResilientContentStorage } from './adapters/storage'
+import { createProcessedRegistryComponent } from './adapters/processed-registry'
 
 // Initialize all the components of the app
 export async function initComponents(): Promise<AppComponents> {
@@ -51,6 +53,20 @@ export async function initComponents(): Promise<AppComponents> {
 
   const storage = createResilientContentStorage({ logs }, rawStorage)
 
+  const pg = await createPgComponent(
+    { logs, config, metrics },
+    {
+      migration: {
+        dir: resolve(__dirname, 'migrations'),
+        migrationsTable: 'pgmigrations',
+        ignorePattern: '.*\\.map',
+        direction: 'up'
+      }
+    }
+  )
+
+  const processedRegistry = createProcessedRegistryComponent({ pg, storage, logs })
+
   // Separate queues so `deployer.onIdle()` — awaited at every poll of every server — drains only
   // the deployer's work, and /snapshots fetches never queue behind an entity backlog.
   const downloadQueue = createJobQueue({
@@ -74,6 +90,7 @@ export async function initComponents(): Promise<AppComponents> {
   const deployer = await createDeployerComponent({
     config,
     storage,
+    processedRegistry,
     downloadQueue,
     fetch,
     logs,
@@ -83,30 +100,10 @@ export async function initComponents(): Promise<AppComponents> {
     entityDownloader
   })
 
-  const key = (hash: string) => `stored-snapshot-${hash}`
-
-  const snapshotStorageLogger = logs.getLogger('ISnapshotStorageComponent')
-
   const snapshotStorage: ISnapshotStorageComponent & IProcessedSnapshotStorageComponent = {
-    async has(snapshotHash: string) {
-      const exists = await storage.exist(key(snapshotHash))
-      snapshotStorageLogger.debug('HasSnapshot', { exists: exists ? 'true' : 'false', snapshotHash })
-      return exists
-    },
-    async markSnapshotAsProcessed(snapshotHash) {
-      snapshotStorageLogger.debug('MarkSnapshotAsProcessed', { snapshotHash })
-      await storage.storeStream(key(snapshotHash), Readable.from([]))
-    },
-    async filterProcessedSnapshotsFrom(snapshotHashes) {
-      snapshotStorageLogger.debug('FilterProcessedSnapshotsFrom', { cids: snapshotHashes.join(',') })
-      const ret = new Set<string>()
-      for (const hash of snapshotHashes) {
-        if (await storage.exist(key(hash))) {
-          ret.add(hash)
-        }
-      }
-      return ret
-    }
+    has: (snapshotHash) => processedRegistry.wasSnapshotProcessed(snapshotHash),
+    markSnapshotAsProcessed: (snapshotHash) => processedRegistry.markSnapshotProcessed(snapshotHash),
+    filterProcessedSnapshotsFrom: (snapshotHashes) => processedRegistry.filterProcessedSnapshots(snapshotHashes)
   }
 
   const synchronizer = await createSynchronizer(
@@ -155,6 +152,8 @@ export async function initComponents(): Promise<AppComponents> {
     metrics,
     storage,
     fs,
+    pg,
+    processedRegistry,
     downloadQueue,
     synchronizerQueue,
     synchronizer,

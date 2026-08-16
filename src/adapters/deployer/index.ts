@@ -10,6 +10,7 @@ export async function createDeployerComponent(
     | 'config'
     | 'logs'
     | 'storage'
+    | 'processedRegistry'
     | 'downloadQueue'
     | 'fetch'
     | 'metrics'
@@ -87,7 +88,7 @@ export async function createDeployerComponent(
           }
         }
 
-        const exists = await components.storage.exist(entity.entityId)
+        const exists = await components.processedRegistry.wasEntityPublished(entity.entityId)
 
         if (exists) {
           logger.debug('Entity already stored', {
@@ -115,9 +116,16 @@ export async function createDeployerComponent(
               components.metrics.decrement('download_queue_size')
               components.metrics.increment('download_queue_pending')
               try {
+                // Claim before downloading so an absent row always means "predates the table".
+                // Without it a failed publish would leave a stored object and no row, which the
+                // storage fallback reads as processed — the drop this replaces.
+                await components.processedRegistry.claimEntity(entity)
+
                 const metadata = await components.entityDownloader.downloadEntity(entity, servers)
 
                 await publishDeploymentNotifications({ ...entity, metadata }, servers)
+
+                await components.processedRegistry.markEntityPublished(entity.entityId)
 
                 await markAsDeployed()
 
