@@ -1,7 +1,7 @@
 import { IContentStorageComponent } from '@dcl/catalyst-storage'
 import { IFetchComponent } from '@dcl/core-commons'
 import { IConfigComponent, ILoggerComponent } from '@well-known-components/interfaces'
-import { EntityDownloaderComponent, SnsPublisherComponent } from '../../src/types'
+import { EntityDownloaderComponent, ProcessedRegistryComponent, SnsPublisherComponent } from '../../src/types'
 import { IJobQueue } from '@dcl/snapshots-fetcher'
 
 export const configMock: jest.Mocked<IConfigComponent> = {
@@ -36,6 +36,27 @@ export const logsMock: jest.Mocked<ILoggerComponent> = {
 
 export const fetcherMock: jest.Mocked<IFetchComponent> = {
   fetch: jest.fn()
+}
+
+export const pgMock: jest.Mocked<any> = {
+  query: jest.fn(),
+  start: jest.fn(),
+  stop: jest.fn(),
+  streamQuery: jest.fn(),
+  withTransaction: jest.fn(),
+  withAsyncContextTransaction: jest.fn(),
+  getPool: jest.fn()
+}
+
+export const processedRegistryMock: jest.Mocked<ProcessedRegistryComponent> = {
+  wasEntityPublished: jest.fn(),
+  claimEntity: jest.fn(),
+  markEntityPublished: jest.fn(),
+  wasSnapshotProcessed: jest.fn(),
+  markSnapshotProcessed: jest.fn(),
+  filterProcessedSnapshots: jest.fn(),
+  countUnpublishedEntities: jest.fn(),
+  reportUnpublishedEntities: jest.fn()
 }
 
 export const storageMock: jest.Mocked<IContentStorageComponent> = {

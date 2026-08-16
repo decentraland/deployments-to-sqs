@@ -48,5 +48,8 @@ export async function main(program: Lifecycle.EntryPointParameters<AppComponents
   // start ports: db, listeners, synchronizations, etc
   await startComponents()
 
+  // Surfaces entities the pre-Postgres dedup stranded: claimed/stored but never published.
+  await components.processedRegistry.reportUnpublishedEntities()
+
   await components.synchronizer.syncWithServers(new Set(servers))
 }

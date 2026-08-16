@@ -7,6 +7,7 @@ import type {
   IMetricsComponent
 } from '@well-known-components/interfaces'
 import { IContentStorageComponent, IFileSystemComponent } from '@dcl/catalyst-storage'
+import { IPgComponent } from '@dcl/pg-component'
 import { metricDeclarations } from './metrics'
 
 export type GlobalContext = {
@@ -26,6 +27,8 @@ export type BaseComponents = {
   metrics: IMetricsComponent<keyof typeof metricDeclarations>
   fs: IFileSystemComponent
   storage: IContentStorageComponent
+  pg: IPgComponent
+  processedRegistry: ProcessedRegistryComponent
   synchronizer: SynchronizerComponent
   deployer: IDeployerComponent
   snsPublisher: SnsPublisherComponent
@@ -35,6 +38,18 @@ export type BaseComponents = {
 
 export type SnsPublisherComponent = {
   publishMessage: (entity: DeployableEntity & { metadata: any }, contentServerUrls: string[]) => Promise<void>
+}
+
+/** Records what has been processed. Backed by Postgres, falling back to storage for pre-table entities. */
+export type ProcessedRegistryComponent = {
+  wasEntityPublished: (entityId: string) => Promise<boolean>
+  claimEntity: (entity: Pick<DeployableEntity, 'entityId' | 'entityType' | 'entityTimestamp'>) => Promise<void>
+  markEntityPublished: (entityId: string) => Promise<void>
+  wasSnapshotProcessed: (snapshotHash: string) => Promise<boolean>
+  markSnapshotProcessed: (snapshotHash: string) => Promise<void>
+  filterProcessedSnapshots: (snapshotHashes: string[]) => Promise<Set<string>>
+  countUnpublishedEntities: () => Promise<number>
+  reportUnpublishedEntities: () => Promise<void>
 }
 
 export type EntityDownloaderComponent = {

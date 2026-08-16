@@ -8,7 +8,8 @@ import {
   metricsMock,
   snsPublisherMock,
   entityDownloaderMock,
-  downloadQueueMock
+  downloadQueueMock,
+  processedRegistryMock
 } from '../../mocks/components'
 import { DeployableEntity, IDeployerComponent } from '@dcl/snapshots-fetcher'
 
@@ -19,6 +20,7 @@ describe('DeployerComponent', () => {
       | 'config'
       | 'logs'
       | 'storage'
+      | 'processedRegistry'
       | 'downloadQueue'
       | 'fetch'
       | 'metrics'
@@ -47,6 +49,7 @@ describe('DeployerComponent', () => {
       config: configMock,
       logs: logsMock,
       storage: storageMock,
+      processedRegistry: processedRegistryMock,
       downloadQueue: downloadQueueMock,
       fetch: fetcherMock,
       metrics: metricsMock,
@@ -83,12 +86,12 @@ describe('DeployerComponent', () => {
       entityType: maliciousEntity.entityType
     })
     expect(maliciousEntity.markAsDeployed).toHaveBeenCalled()
-    expect(storageMock.exist).not.toHaveBeenCalled()
+    expect(processedRegistryMock.wasEntityPublished).not.toHaveBeenCalled()
     expect(entityDownloaderMock.downloadEntity).not.toHaveBeenCalled()
   })
 
   it('should call mark as deployed when the entity is already stored', async () => {
-    storageMock.exist.mockResolvedValue(true)
+    processedRegistryMock.wasEntityPublished.mockResolvedValue(true)
 
     const deployer = await createDeployerComponent(components)
     await deployer.scheduleEntityDeployment(mockEntity, mockServers)
@@ -102,7 +105,7 @@ describe('DeployerComponent', () => {
   })
 
   it('should do nothing if the entity is already stored but does not define a markAsDeployed function', async () => {
-    storageMock.exist.mockResolvedValue(true)
+    processedRegistryMock.wasEntityPublished.mockResolvedValue(true)
 
     const mockEntityWithoutMarkAsDeployed = { ...mockEntity, markAsDeployed: undefined }
 
@@ -117,7 +120,7 @@ describe('DeployerComponent', () => {
   })
 
   it('should successfully deploy a new entity', async () => {
-    storageMock.exist.mockResolvedValue(false)
+    processedRegistryMock.wasEntityPublished.mockResolvedValue(false)
     entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
     snsPublisherMock.publishMessage.mockResolvedValue()
 
@@ -140,11 +143,13 @@ describe('DeployerComponent', () => {
   })
 
   it('should handle retryable errors gracefully', async () => {
-    storageMock.exist.mockResolvedValue(false)
+    processedRegistryMock.wasEntityPublished.mockResolvedValue(false)
     entityDownloaderMock.downloadEntity.mockRejectedValue(new Error('Network Error'))
 
     const deployer = await createDeployerComponent(components)
     await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+
+    await jest.advanceTimersByTimeAsync(0)
 
     expect(metricsMock.increment).toHaveBeenCalledWith('entity_deployment_failure', {
       retryable: 'true',
@@ -154,11 +159,13 @@ describe('DeployerComponent', () => {
   })
 
   it('should handle non-retryable errors and mark the entity as deployed', async () => {
-    storageMock.exist.mockResolvedValue(false)
+    processedRegistryMock.wasEntityPublished.mockResolvedValue(false)
     entityDownloaderMock.downloadEntity.mockRejectedValue(new Error('status: 404'))
 
     const deployer = await createDeployerComponent(components)
     await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+
+    await jest.advanceTimersByTimeAsync(0)
 
     expect(metricsMock.increment).toHaveBeenCalledWith('entity_deployment_failure', {
       retryable: 'false',
@@ -168,7 +175,7 @@ describe('DeployerComponent', () => {
   })
 
   it('should handle errors before scheduling the job', async () => {
-    storageMock.exist.mockResolvedValue(false)
+    processedRegistryMock.wasEntityPublished.mockResolvedValue(false)
     downloadQueueMock.onSizeLessThan.mockRejectedValue(new Error('Queue Error'))
 
     const deployer = await createDeployerComponent(components)
@@ -195,7 +202,7 @@ describe('DeployerComponent', () => {
         entityType: oldEntity.entityType
       })
       expect(oldEntity.markAsDeployed).toHaveBeenCalled()
-      expect(storageMock.exist).not.toHaveBeenCalled()
+      expect(processedRegistryMock.wasEntityPublished).not.toHaveBeenCalled()
       expect(downloadQueueMock.onSizeLessThan).not.toHaveBeenCalled()
       expect(entityDownloaderMock.downloadEntity).not.toHaveBeenCalled()
     })
@@ -203,7 +210,7 @@ describe('DeployerComponent', () => {
     it('should process recent entities normally when the age filter is enabled', async () => {
       const maxAgeInSeconds = 3600
       setEntityMaxAge(String(maxAgeInSeconds))
-      storageMock.exist.mockResolvedValue(false)
+      processedRegistryMock.wasEntityPublished.mockResolvedValue(false)
       entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
       snsPublisherMock.publishMessage.mockResolvedValue()
 
@@ -220,7 +227,7 @@ describe('DeployerComponent', () => {
     it('should not skip an entity aged exactly at the threshold', async () => {
       const maxAgeInSeconds = 3600
       setEntityMaxAge(String(maxAgeInSeconds))
-      storageMock.exist.mockResolvedValue(false)
+      processedRegistryMock.wasEntityPublished.mockResolvedValue(false)
       entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
       snsPublisherMock.publishMessage.mockResolvedValue()
       const boundaryEntity = { ...mockEntity, entityTimestamp: Date.now() - maxAgeInSeconds * 1000 }
@@ -231,7 +238,7 @@ describe('DeployerComponent', () => {
       await jest.advanceTimersByTimeAsync(0)
 
       expect(metricsMock.increment).not.toHaveBeenCalledWith('entity_skipped_old', expect.anything())
-      expect(storageMock.exist).toHaveBeenCalled()
+      expect(processedRegistryMock.wasEntityPublished).toHaveBeenCalled()
       expect(entityDownloaderMock.downloadEntity).toHaveBeenCalledWith(boundaryEntity, mockServers)
     })
 
@@ -239,7 +246,7 @@ describe('DeployerComponent', () => {
       'should process all entities when config is "%s" (filter disabled)',
       async (configValue) => {
         setEntityMaxAge(configValue)
-        storageMock.exist.mockResolvedValue(false)
+        processedRegistryMock.wasEntityPublished.mockResolvedValue(false)
         entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
         snsPublisherMock.publishMessage.mockResolvedValue()
         const oldTimestamp = Date.now() - 10 * 365 * 24 * 3600 * 1000
@@ -274,7 +281,7 @@ describe('DeployerComponent', () => {
       onUnhandled = (reason: unknown) => unhandled.push(reason)
       process.on('unhandledRejection', onUnhandled)
 
-      storageMock.exist.mockResolvedValue(false)
+      processedRegistryMock.wasEntityPublished.mockResolvedValue(false)
       downloadQueueMock.scheduleJob.mockRejectedValue(queueError)
 
       const deployer = await createDeployerComponent(components)
@@ -306,7 +313,7 @@ describe('DeployerComponent', () => {
   describe('when tracking download queue depth', () => {
     describe('and a job is scheduled and runs to completion', () => {
       beforeEach(async () => {
-        storageMock.exist.mockResolvedValue(false)
+        processedRegistryMock.wasEntityPublished.mockResolvedValue(false)
         entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
         snsPublisherMock.publishMessage.mockResolvedValue()
 
@@ -328,7 +335,7 @@ describe('DeployerComponent', () => {
 
     describe('and the job fails', () => {
       beforeEach(async () => {
-        storageMock.exist.mockResolvedValue(false)
+        processedRegistryMock.wasEntityPublished.mockResolvedValue(false)
         entityDownloaderMock.downloadEntity.mockRejectedValue(new Error('boom'))
 
         const deployer = await createDeployerComponent(components)
@@ -348,7 +355,7 @@ describe('DeployerComponent', () => {
       let pendingDelta: number
 
       beforeEach(async () => {
-        storageMock.exist.mockResolvedValue(false)
+        processedRegistryMock.wasEntityPublished.mockResolvedValue(false)
         entityDownloaderMock.downloadEntity.mockResolvedValue(undefined)
         snsPublisherMock.publishMessage.mockResolvedValue()
         downloadQueueMock.scheduleJob.mockImplementation(async (fn) => {
@@ -385,7 +392,7 @@ describe('DeployerComponent', () => {
 
     describe('and the queue refuses the job because it has been stopped', () => {
       beforeEach(async () => {
-        storageMock.exist.mockResolvedValue(false)
+        processedRegistryMock.wasEntityPublished.mockResolvedValue(false)
         downloadQueueMock.scheduleJob.mockImplementation(() => {
           throw new Error('The job queue was stopped and no longer accepts jobs')
         })
