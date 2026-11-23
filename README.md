@@ -100,6 +100,20 @@ yarn start
 
 The service will start polling the configured Catalyst nodes and publishing deployment events to SNS.
 
+### Adding a content server without the snapshot backfill
+
+On its first boot with a new content server, the service streams every entity in that server's snapshots before it polls any server. To skip that backfill, mark the server's current snapshots as processed before adding it to `CONTENT_SERVER_URLS`. Pointer changes then start after the newest snapshot, and entities that only appear in older snapshots are never announced.
+
+```bash
+yarn build
+# Dry run: lists the markers that already exist and the ones it would write
+yarn seed-snapshot-markers https://dcl.dev/content --bucket <bucket>
+# Writes the missing `stored-snapshot-<hash>` markers and checks that they exist
+yarn seed-snapshot-markers https://dcl.dev/content --bucket <bucket> --apply
+```
+
+`--bucket` uses `AWS_REGION` and the AWS credentials from the environment. It never falls back to `BUCKET`. Use `--folder <path>` to seed a local folder storage instead.
+
 ## Testing
 
 This service includes comprehensive test coverage with both unit and integration tests.
