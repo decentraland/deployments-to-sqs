@@ -2,6 +2,7 @@ import { ContentMapping, DeployableEntity, downloadEntityAndContentFiles } from 
 import { AppComponents, EntityDownloaderComponent, EntityDownloadError } from '../../types'
 import { toEntityTypeLabel } from '../../logic/entity-type-label'
 import { getPositiveInt } from '../../logic/tuning'
+import { isNonRetryableErrorMessage } from '../../logic/retryable'
 
 export async function createEntityDownloaderComponent(
   components: Pick<AppComponents, 'config' | 'logs' | 'storage' | 'fetch' | 'metrics'>
@@ -14,7 +15,20 @@ export async function createEntityDownloaderComponent(
   // DOWNLOAD_QUEUE_CONCURRENCY x this. Lowered from the library default of 10.
   const contentFilesConcurrency = await getPositiveInt(components.config, 'CONTENT_FILES_CONCURRENCY', 4)
 
+  async function discardEntityFile(entity: DeployableEntity): Promise<void> {
+    try {
+      await components.storage.delete([entity.entityId])
+    } catch (error: unknown) {
+      logger.error('Failed to remove the stored entity file', {
+        entityId: entity.entityId,
+        entityType: entity.entityType,
+        error: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+
   return {
+    discardEntityFile,
     async downloadEntity(entity: DeployableEntity, servers: string[]): Promise<any> {
       const markAsDeployed = entity.markAsDeployed || (async () => {})
       const entityTypeLabel = toEntityTypeLabel(entity.entityType)
@@ -51,12 +65,16 @@ export async function createEntityDownloaderComponent(
           errorMessage: error.message
         })
 
-        const isNonRetryable = error.message?.match(/status: 4\d{2}/)
+        const isNonRetryable = isNonRetryableErrorMessage(error?.message)
 
         components.metrics.increment('entity_download_failure', {
           entityType: entityTypeLabel,
           retryable: isNonRetryable ? 'false' : 'true'
         })
+
+        // The entity file is stored before its content files, so a failure can leave it behind;
+        // the deployer's dedup check would then skip every retry and the event would be lost.
+        await discardEntityFile(entity)
 
         if (isNonRetryable) {
           await markAsDeployed()

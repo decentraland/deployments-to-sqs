@@ -40,6 +40,11 @@ export type SnsPublisherComponent = {
 export type EntityDownloaderComponent = {
   /** Resolves to the downloaded entity's `metadata`, which the deployer forwards to the publishers. */
   downloadEntity: (entity: DeployableEntity, contentServerUrls: string[]) => Promise<unknown>
+  /**
+   * Removes the stored entity file so the bucket dedup check doesn't treat a half-processed entity as published.
+   * Never throws: a failed removal is logged so it can't mask the error that triggered it.
+   */
+  discardEntityFile: (entity: DeployableEntity) => Promise<void>
 }
 
 // components used in runtime
