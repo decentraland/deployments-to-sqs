@@ -133,7 +133,10 @@ export async function createWorldsChangesClientComponent(
           redirect: 'error',
           attempts: 1,
           abortController: controller,
-          headers: { accept: 'application/json' }
+          headers: {
+            accept: 'application/json',
+            ...(options.token ? { authorization: `Bearer ${options.token}` } : {})
+          }
         })
       } catch (error: unknown) {
         throw new WorldsChangesRequestError(feedUrl, error instanceof Error ? error.message : String(error))

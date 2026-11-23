@@ -8,6 +8,8 @@ export type WorldsChangesFeed = {
   host: string
   /** Public worlds base sent as the `sourceContentServerUrl` message attribute. */
   sourceContentServerUrl: string
+  /** Bearer token for the feed, if it is gated. Never logged. */
+  token?: string
 }
 
 /** Why a change was skipped instead of relayed. Bounded set; used as a metric label. */

@@ -70,6 +70,7 @@ function assertPlainHttpsUrl(raw: string, allowedHosts: Set<string>, name: strin
  *
  * @param rawUrls - WORLDS_CHANGES_URLS.
  * @param rawSourceUrls - WORLDS_CHANGES_SOURCE_URLS.
+ * @param rawTokens - WORLDS_CHANGES_TOKENS: one bearer token per feed, positional; an empty entry sends none.
  * @param allowedHosts - Parsed ALLOWED_CONTENT_SERVER_HOSTS.
  * @returns The feeds; empty when WORLDS_CHANGES_URLS is unset or blank.
  * @throws InvalidWorldsChangesConfigError on a non-allowlisted, malformed or duplicated entry.
@@ -77,13 +78,25 @@ function assertPlainHttpsUrl(raw: string, allowedHosts: Set<string>, name: strin
 export function parseWorldsChangesFeeds(
   rawUrls: string | undefined,
   rawSourceUrls: string | undefined,
-  allowedHosts: Set<string>
+  allowedHosts: Set<string>,
+  rawTokens?: string
 ): WorldsChangesFeed[] {
   const urls = parseList(rawUrls)
   const sourceUrls = parseList(rawSourceUrls)
   if (sourceUrls.length > 0 && sourceUrls.length !== urls.length) {
     throw new InvalidWorldsChangesConfigError('WORLDS_CHANGES_SOURCE_URLS must have one entry per WORLDS_CHANGES_URLS')
   }
+  // Positional and empty entries kept, so "a,,b" gates feeds 1 and 3 only.
+  const tokens = rawTokens && rawTokens.trim().length > 0 ? rawTokens.split(',').map((token) => token.trim()) : []
+  if (tokens.length > 0 && tokens.length !== urls.length) {
+    throw new InvalidWorldsChangesConfigError('WORLDS_CHANGES_TOKENS must have one entry per WORLDS_CHANGES_URLS')
+  }
+  // The value is never echoed: only its position.
+  tokens.forEach((token, index) => {
+    if (token.length > 0 && !/^[\x21-\x7e]+$/.test(token)) {
+      throw new InvalidWorldsChangesConfigError(`WORLDS_CHANGES_TOKENS entry ${index + 1} has invalid characters`)
+    }
+  })
 
   const seenHosts = new Set<string>()
   return urls.map((raw, index) => {
@@ -106,7 +119,8 @@ export function parseWorldsChangesFeeds(
     return {
       url: `${url.origin}${path}`,
       host: url.hostname,
-      sourceContentServerUrl: `${source.origin}${source.pathname.replace(/\/+$/, '')}`
+      sourceContentServerUrl: `${source.origin}${source.pathname.replace(/\/+$/, '')}`,
+      ...(tokens[index] ? { token: tokens[index] } : {})
     }
   })
 }
@@ -163,7 +177,12 @@ export async function createWorldsChangeRelayComponent(
   }
 
   const allowedHosts = parseAllowedContentServerHosts(await config.requireString('ALLOWED_CONTENT_SERVER_HOSTS'))
-  const feeds = parseWorldsChangesFeeds(rawUrls, await config.getString('WORLDS_CHANGES_SOURCE_URLS'), allowedHosts)
+  const feeds = parseWorldsChangesFeeds(
+    rawUrls,
+    await config.getString('WORLDS_CHANGES_SOURCE_URLS'),
+    allowedHosts,
+    await config.getString('WORLDS_CHANGES_TOKENS')
+  )
   const pollIntervalMs = await getPositiveInt(config, 'WORLDS_CHANGES_POLL_INTERVAL_MS', 5_000)
   const maxBackoffMs = await getPositiveInt(config, 'WORLDS_CHANGES_MAX_BACKOFF_MS', 60_000)
   const pageLimit = await getPositiveInt(config, 'WORLDS_CHANGES_PAGE_LIMIT', 100)
@@ -293,7 +312,12 @@ export async function createWorldsChangeRelayComponent(
       let caughtUp = true
       const cursorBeforePage = cursor
       try {
-        const page = await worldsChangesClient.fetchChanges(feed.url, { after: cursor, limit: pageLimit, signal })
+        const page = await worldsChangesClient.fetchChanges(feed.url, {
+          after: cursor,
+          limit: pageLimit,
+          signal,
+          token: feed.token
+        })
         try {
           for (const change of page.changes) {
             if (signal.aborted) break

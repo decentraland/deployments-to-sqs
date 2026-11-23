@@ -122,6 +122,36 @@ describe('when fetching a page of worlds changes', () => {
     })
   })
 
+  describe('and a token is given', () => {
+    beforeEach(() => {
+      fetch.fetch.mockResolvedValueOnce(jsonResponse({ changes: [], next: null }))
+    })
+
+    it('should send it as a bearer authorization header', async () => {
+      await client.fetchChanges(FEED_URL, { limit: 10, token: 'feed-token-example' })
+      expect(fetch.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          headers: expect.objectContaining({ authorization: 'Bearer feed-token-example' })
+        })
+      )
+    })
+  })
+
+  describe('and no token is given', () => {
+    beforeEach(() => {
+      fetch.fetch.mockResolvedValueOnce(jsonResponse({ changes: [], next: null }))
+    })
+
+    it('should send no authorization header', async () => {
+      await client.fetchChanges(FEED_URL, { limit: 10 })
+      expect(fetch.fetch).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ headers: { accept: 'application/json' } })
+      )
+    })
+  })
+
   describe('and the feed answers a non-2xx status', () => {
     beforeEach(() => {
       fetch.fetch.mockResolvedValueOnce(new Response('bad cursor', { status: 400 }))

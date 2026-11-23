@@ -23,6 +23,8 @@ export type FetchChangesOptions = {
   limit: number
   /** Aborts the in-flight request (e.g. on shutdown). */
   signal?: AbortSignal
+  /** Bearer token sent as `Authorization`; never logged. */
+  token?: string
 }
 
 export interface IWorldsChangesClientComponent extends IBaseComponent {

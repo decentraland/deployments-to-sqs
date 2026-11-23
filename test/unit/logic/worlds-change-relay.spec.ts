@@ -119,6 +119,35 @@ describe('when parsing the worlds changes feed configuration', () => {
     })
   })
 
+  describe('and tokens are configured with an empty entry', () => {
+    it('should attach each token to its feed and none for the empty entry', () => {
+      expect(
+        parseWorldsChangesFeeds(
+          `${FEED_URL},https://dcl.dev/changes`,
+          undefined,
+          allowedHosts,
+          'feed-token-example,'
+        ).map((feed) => feed.token)
+      ).toEqual(['feed-token-example', undefined])
+    })
+  })
+
+  describe('and the number of tokens does not match the feeds', () => {
+    it('should throw an InvalidWorldsChangesConfigError', () => {
+      expect(() => parseWorldsChangesFeeds(FEED_URL, undefined, allowedHosts, 'a,b')).toThrow(
+        InvalidWorldsChangesConfigError
+      )
+    })
+  })
+
+  describe('and a token has invalid characters', () => {
+    it('should throw an error that does not contain the token', () => {
+      expect(() => parseWorldsChangesFeeds(FEED_URL, undefined, allowedHosts, 'feed token example')).toThrow(
+        /^(?!.*feed token example).*entry 1 has invalid characters/
+      )
+    })
+  })
+
   describe('and two feeds share a host', () => {
     it('should throw an InvalidWorldsChangesConfigError', () => {
       expect(() =>
@@ -419,6 +448,31 @@ describe('when running the worlds change relay', () => {
 
     it('should relay both pages', () => {
       expect(snsEventPublisher.publishRawMessage).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  describe('and the feed is gated by a token and polling fails', () => {
+    let token: string
+
+    beforeEach(async () => {
+      token = 'feed-token-example'
+      configValues.WORLDS_CHANGES_TOKENS = token
+      worldsChangesClient.fetchChanges
+        .mockRejectedValueOnce(new Error('unauthorized'))
+        .mockImplementation(blockUntilAborted)
+      await runUntilFetched(2)
+    })
+
+    it('should pass the token to the client', () => {
+      expect(worldsChangesClient.fetchChanges).toHaveBeenCalledWith(FEED_URL, expect.objectContaining({ token }))
+    })
+
+    it('should never log the token', () => {
+      const logger = logsMock.getLogger('WorldsChangeRelay')
+      const logged = JSON.stringify(
+        Object.values(logger).flatMap((fn) => (jest.isMockFunction(fn) ? fn.mock.calls : []))
+      )
+      expect(logged).not.toContain(token)
     })
   })
 
