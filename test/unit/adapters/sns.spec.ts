@@ -6,7 +6,7 @@ import {
   SnsType
 } from '../../../src/adapters/sns'
 import * as BuildDeploymentMessageFns from '../../../src/logic/build-deployment-message'
-import { AppComponents, SnsPublishError } from '../../../src/types'
+import { AppComponents, SnsPublishError, SnsRawPublishError } from '../../../src/types'
 import { configMock, logsMock, metricsMock } from '../../mocks/components'
 import { Events } from '@dcl/schemas'
 
@@ -172,6 +172,52 @@ describe('SnsPublisherComponent', () => {
           })
         })
       )
+    })
+  })
+
+  describe('when publishing a raw message', () => {
+    let message: string
+    let attributes: Record<string, string>
+
+    beforeEach(() => {
+      message = JSON.stringify({ type: 'world', subType: 'world_undeployment', metadata: { worldName: 'a.dcl.eth' } })
+      attributes = { type: 'world', subType: 'world_undeployment', sourceContentServerUrl: 'https://worlds.example' }
+      mockArnConfigImplementation('EVENTS_SNS_ARN', 'event-arn')
+    })
+
+    describe('and SNS accepts it', () => {
+      beforeEach(() => {
+        mockClient.send = jest.fn().mockResolvedValueOnce({ MessageId: 'message-id' })
+      })
+
+      it('should send the body unchanged with every attribute as a String attribute', async () => {
+        const publisher = await createSnsEventPublisherComponent(components)
+        await publisher.publishRawMessage(message, attributes)
+        expect(mockClient.send).toHaveBeenCalledWith(
+          expect.objectContaining({
+            input: {
+              TopicArn: 'event-arn',
+              Message: message,
+              MessageAttributes: {
+                type: { DataType: 'String', StringValue: 'world' },
+                subType: { DataType: 'String', StringValue: 'world_undeployment' },
+                sourceContentServerUrl: { DataType: 'String', StringValue: 'https://worlds.example' }
+              }
+            }
+          })
+        )
+      })
+    })
+
+    describe('and SNS rejects it', () => {
+      beforeEach(() => {
+        mockClient.send = jest.fn().mockRejectedValueOnce(new Error('AWS error'))
+      })
+
+      it('should reject with an SnsRawPublishError', async () => {
+        const publisher = await createSnsEventPublisherComponent(components)
+        await expect(publisher.publishRawMessage(message, attributes)).rejects.toBeInstanceOf(SnsRawPublishError)
+      })
     })
   })
 

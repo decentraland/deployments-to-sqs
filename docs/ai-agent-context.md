@@ -10,6 +10,9 @@
 - Publishes deployment events to AWS SNS topic (`deployments-sns-${env}`)
 - Continuously monitors multiple Catalyst nodes in parallel
 - Handles deployment metadata (entity ID, pointers, deployer, timestamp, content server URLs)
+- Optionally relays dcl-one worlds change feeds (`WORLDS_CHANGES_URLS`) to the events SNS topic as
+  worlds-content-server `world/*` events, with a `sourceContentServerUrl` message attribute; the cursor
+  is kept in the bucket as `worlds-changes-cursor-<host>`
 
 **Communication Pattern:** 
 - Polling-based (periodic GET requests to Catalyst APIs)

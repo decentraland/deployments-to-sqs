@@ -59,7 +59,8 @@ export const downloadQueueMock: jest.Mocked<IJobQueue> = {
 }
 
 export const snsPublisherMock: jest.Mocked<SnsPublisherComponent> = {
-  publishMessage: jest.fn()
+  publishMessage: jest.fn(),
+  publishRawMessage: jest.fn()
 }
 
 export const entityDownloaderMock: jest.Mocked<EntityDownloaderComponent> = {

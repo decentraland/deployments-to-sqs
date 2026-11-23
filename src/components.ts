@@ -26,6 +26,8 @@ import { Readable } from 'stream'
 import { createEntityDownloaderComponent } from './adapters/entity-downloader'
 import { createSnsDeploymentPublisherComponent, createSnsEventPublisherComponent } from './adapters/sns'
 import { createResilientContentStorage } from './adapters/storage'
+import { createWorldsChangesClientComponent } from './adapters/worlds-changes-client'
+import { createWorldsChangeRelayComponent } from './logic/worlds-change-relay'
 
 // Initialize all the components of the app
 export async function initComponents(): Promise<AppComponents> {
@@ -81,6 +83,16 @@ export async function initComponents(): Promise<AppComponents> {
     snsPublisher,
     snsEventPublisher,
     entityDownloader
+  })
+
+  const worldsChangesClient = await createWorldsChangesClientComponent({ config, fetch })
+  const worldsChangeRelay = await createWorldsChangeRelayComponent({
+    config,
+    logs,
+    metrics,
+    storage,
+    worldsChangesClient,
+    snsEventPublisher
   })
 
   const key = (hash: string) => `stored-snapshot-${hash}`
@@ -161,6 +173,8 @@ export async function initComponents(): Promise<AppComponents> {
     deployer,
     snsPublisher,
     snsEventPublisher,
-    entityDownloader
+    entityDownloader,
+    worldsChangesClient,
+    worldsChangeRelay
   }
 }

@@ -8,6 +8,8 @@ import type {
 } from '@well-known-components/interfaces'
 import { IContentStorageComponent, IFileSystemComponent } from '@dcl/catalyst-storage'
 import { metricDeclarations } from './metrics'
+import type { IWorldsChangesClientComponent } from './adapters/worlds-changes-client'
+import type { IWorldsChangeRelayComponent } from './logic/worlds-change-relay'
 
 export type GlobalContext = {
   components: BaseComponents
@@ -31,10 +33,17 @@ export type BaseComponents = {
   snsPublisher: SnsPublisherComponent
   snsEventPublisher: SnsPublisherComponent
   entityDownloader: EntityDownloaderComponent
+  worldsChangesClient: IWorldsChangesClientComponent
+  worldsChangeRelay: IWorldsChangeRelayComponent
 }
 
 export type SnsPublisherComponent = {
   publishMessage: (entity: DeployableEntity & { metadata: any }, contentServerUrls: string[]) => Promise<void>
+  /**
+   * Publishes an already-serialized message body as is, with the given String message attributes.
+   * @throws SnsRawPublishError when SNS rejects the publish.
+   */
+  publishRawMessage: (message: string, attributes: Record<string, string>) => Promise<void>
 }
 
 export type EntityDownloaderComponent = {
@@ -76,6 +85,13 @@ export class SnsPublishError extends Error {
   ) {
     super(message)
     this.name = 'SnsPublishError'
+  }
+}
+
+export class SnsRawPublishError extends Error {
+  constructor(message: string, public details: { type?: string; subType?: string; error: unknown }) {
+    super(message)
+    this.name = 'SnsRawPublishError'
   }
 }
 
