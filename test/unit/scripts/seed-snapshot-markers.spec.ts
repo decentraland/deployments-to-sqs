@@ -10,7 +10,7 @@ import {
   seedSnapshotMarkers,
   UsageError
 } from '../../../src/scripts/seed-snapshot-markers'
-import { snapshotMarkerKey } from '../../../src/logic/snapshot-markers'
+import { ParsedSnapshotHashes, snapshotMarkerKey } from '../../../src/logic/snapshot-markers'
 
 describe('when parsing the seed script arguments', () => {
   let argv: string[]
@@ -70,6 +70,11 @@ describe('when parsing the seed script arguments', () => {
 
 describe('when checking the content server against the allowlist', () => {
   let rawAllowedHosts: string | undefined
+  let contentServerUrl: string
+
+  beforeEach(() => {
+    contentServerUrl = 'https://dcl.dev/content'
+  })
 
   describe('and ALLOWED_CONTENT_SERVER_HOSTS is not set', () => {
     beforeEach(() => {
@@ -77,7 +82,7 @@ describe('when checking the content server against the allowlist', () => {
     })
 
     it('should accept any server', () => {
-      expect(() => assertAllowedContentServer('https://dcl.dev/content', rawAllowedHosts)).not.toThrow()
+      expect(() => assertAllowedContentServer(contentServerUrl, rawAllowedHosts)).not.toThrow()
     })
   })
 
@@ -87,7 +92,7 @@ describe('when checking the content server against the allowlist', () => {
     })
 
     it('should accept it', () => {
-      expect(() => assertAllowedContentServer('https://dcl.dev/content', rawAllowedHosts)).not.toThrow()
+      expect(() => assertAllowedContentServer(contentServerUrl, rawAllowedHosts)).not.toThrow()
     })
   })
 
@@ -97,35 +102,60 @@ describe('when checking the content server against the allowlist', () => {
     })
 
     it('should throw a usage error', () => {
-      expect(() => assertAllowedContentServer('https://dcl.dev/content', rawAllowedHosts)).toThrow(UsageError)
+      expect(() => assertAllowedContentServer(contentServerUrl, rawAllowedHosts)).toThrow(UsageError)
     })
   })
 })
 
 describe('when checking a snapshot listing', () => {
+  let listing: ParsedSnapshotHashes
+  let apply: boolean
+
   describe('and no valid snapshot is listed', () => {
+    beforeEach(() => {
+      listing = { hashes: [], invalid: 0 }
+      apply = false
+    })
+
     it('should report a problem even in a dry run', () => {
-      expect(listingProblem({ hashes: [], invalid: 0 }, false)).toMatch(/no valid snapshots/)
+      expect(listingProblem(listing, apply)).toMatch(/no valid snapshots/)
     })
   })
 
   describe('and some entries are invalid', () => {
+    beforeEach(() => {
+      listing = { hashes: ['bafyone'], invalid: 1 }
+    })
+
     describe('and it is a dry run', () => {
+      beforeEach(() => {
+        apply = false
+      })
+
       it('should report no problem', () => {
-        expect(listingProblem({ hashes: ['bafyone'], invalid: 1 }, false)).toBeUndefined()
+        expect(listingProblem(listing, apply)).toBeUndefined()
       })
     })
 
     describe('and --apply is given', () => {
+      beforeEach(() => {
+        apply = true
+      })
+
       it('should refuse to write', () => {
-        expect(listingProblem({ hashes: ['bafyone'], invalid: 1 }, true)).toMatch(/refusing to write/)
+        expect(listingProblem(listing, apply)).toMatch(/refusing to write/)
       })
     })
   })
 
   describe('and every entry is valid', () => {
+    beforeEach(() => {
+      listing = { hashes: ['bafyone'], invalid: 0 }
+      apply = true
+    })
+
     it('should report no problem', () => {
-      expect(listingProblem({ hashes: ['bafyone'], invalid: 0 }, true)).toBeUndefined()
+      expect(listingProblem(listing, apply)).toBeUndefined()
     })
   })
 })
