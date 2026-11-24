@@ -87,9 +87,14 @@ export const metricDeclarations = {
     labelNames: ['feed', 'reason']
   },
   worlds_changes_relay_failure: {
-    help: 'Count worlds change relay failures (cursor load, poll or publish) that triggered a backoff',
+    help: 'Count worlds change relay failures (load_cursor, poll, publish, save_cursor) that triggered a backoff',
     type: IMetricsComponent.CounterType,
     labelNames: ['feed', 'operation', 'error']
+  },
+  worlds_changes_relay_halted: {
+    help: 'Count worlds change relay halts that need an operator (source_mismatch, http_401/403/409/410)',
+    type: IMetricsComponent.CounterType,
+    labelNames: ['feed', 'reason']
   }
 }
 

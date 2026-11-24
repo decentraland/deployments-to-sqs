@@ -4,13 +4,15 @@ import { IConfigComponent, START_COMPONENT, STOP_COMPONENT } from '@well-known-c
 import {
   FetchChangesOptions,
   IWorldsChangesClientComponent,
+  WorldsChangesHttpError,
   WorldsChangesPage
 } from '../../../src/adapters/worlds-changes-client'
 import {
   createWorldsChangeRelayComponent,
   InvalidWorldsChangesConfigError,
   IWorldsChangeRelayComponent,
-  parseWorldsChangesFeeds
+  parseWorldsChangesFeeds,
+  toBareHttpsOrigin
 } from '../../../src/logic/worlds-change-relay'
 import { SnsPublisherComponent } from '../../../src/types'
 import { logsMock, metricsMock } from '../../mocks/components'
@@ -64,85 +66,98 @@ function deploymentEvent(entityId: string, contentServerUrls: string[] = [SOURCE
 
 describe('when parsing the worlds changes feed configuration', () => {
   let allowedHosts: Set<string>
+  let allowedWorldsHosts: Set<string>
 
   beforeEach(() => {
     allowedHosts = new Set([HOST, 'dcl.dev'])
+    allowedWorldsHosts = new Set([HOST])
   })
+
+  function parse(rawUrls: string, rawSourceUrls?: string, rawTokens?: string) {
+    return parseWorldsChangesFeeds({ rawUrls, rawSourceUrls, rawTokens, allowedHosts, allowedWorldsHosts })
+  }
 
   describe('and no source urls are configured', () => {
     it('should derive the source url by stripping /changes from the feed url', () => {
-      expect(parseWorldsChangesFeeds(`${FEED_URL}/`, undefined, allowedHosts)).toEqual([
-        { url: FEED_URL, host: HOST, sourceContentServerUrl: SOURCE_URL }
-      ])
+      expect(parse(`${FEED_URL}/`)).toEqual([{ url: FEED_URL, host: HOST, sourceContentServerUrl: SOURCE_URL }])
+    })
+  })
+
+  describe('and the derived source url has a path', () => {
+    it('should throw an InvalidWorldsChangesConfigError', () => {
+      expect(() => parse('https://dcl.dev/worlds-content-server/changes')).toThrow(InvalidWorldsChangesConfigError)
     })
   })
 
   describe('and a source url is configured for the feed', () => {
-    it('should use the configured source url', () => {
-      expect(
-        parseWorldsChangesFeeds('https://dcl.dev/worlds-content-server/changes', `${SOURCE_URL}/`, allowedHosts)
-      ).toEqual([
+    it('should use the configured source url as a bare lowercase origin', () => {
+      expect(parse('https://dcl.dev/worlds-content-server/changes', 'HTTPS://Worlds-Content-Server.DCL.dev/')).toEqual([
         { url: 'https://dcl.dev/worlds-content-server/changes', host: 'dcl.dev', sourceContentServerUrl: SOURCE_URL }
       ])
     })
   })
 
+  describe('and the configured source url has a path', () => {
+    it('should throw an InvalidWorldsChangesConfigError', () => {
+      expect(() =>
+        parse('https://dcl.dev/worlds-content-server/changes', `${SOURCE_URL}/worlds-content-server`)
+      ).toThrow(InvalidWorldsChangesConfigError)
+    })
+  })
+
+  describe('and the configured source url has an explicit port', () => {
+    it('should throw an InvalidWorldsChangesConfigError', () => {
+      expect(() => parse('https://dcl.dev/changes', `${SOURCE_URL}:443`)).toThrow(InvalidWorldsChangesConfigError)
+    })
+  })
+
   describe('and the number of source urls does not match the feeds', () => {
     it('should throw an InvalidWorldsChangesConfigError', () => {
-      expect(() => parseWorldsChangesFeeds(FEED_URL, `${SOURCE_URL},${SOURCE_URL}`, allowedHosts)).toThrow(
-        InvalidWorldsChangesConfigError
-      )
+      expect(() => parse(FEED_URL, `${SOURCE_URL},${SOURCE_URL}`)).toThrow(InvalidWorldsChangesConfigError)
     })
   })
 
   describe('and a feed host is not allowlisted', () => {
     it('should throw an InvalidWorldsChangesConfigError', () => {
-      expect(() => parseWorldsChangesFeeds('https://evil.example.com/changes', undefined, allowedHosts)).toThrow(
-        InvalidWorldsChangesConfigError
-      )
+      expect(() => parse('https://evil.example.com/changes')).toThrow(InvalidWorldsChangesConfigError)
     })
   })
 
-  describe('and a source url is not allowlisted', () => {
+  describe('and a source host is only on the catalyst allowlist', () => {
     it('should throw an InvalidWorldsChangesConfigError', () => {
-      expect(() => parseWorldsChangesFeeds(FEED_URL, 'https://evil.example.com', allowedHosts)).toThrow(
-        InvalidWorldsChangesConfigError
+      expect(() => parse('https://dcl.dev/worlds-content-server/changes', 'https://dcl.dev')).toThrow(
+        /not in ALLOWED_WORLDS_CONTENT_SERVER_HOSTS/
       )
     })
   })
 
   describe('and a feed url does not end with /changes', () => {
     it('should throw an InvalidWorldsChangesConfigError', () => {
-      expect(() => parseWorldsChangesFeeds(SOURCE_URL, undefined, allowedHosts)).toThrow(
-        InvalidWorldsChangesConfigError
-      )
+      expect(() => parse(SOURCE_URL)).toThrow(InvalidWorldsChangesConfigError)
     })
   })
 
   describe('and tokens are configured with an empty entry', () => {
+    beforeEach(() => {
+      allowedWorldsHosts.add('dcl.dev')
+    })
+
     it('should attach each token to its feed and none for the empty entry', () => {
       expect(
-        parseWorldsChangesFeeds(
-          `${FEED_URL},https://dcl.dev/changes`,
-          undefined,
-          allowedHosts,
-          'feed-token-example,'
-        ).map((feed) => feed.token)
+        parse(`${FEED_URL},https://dcl.dev/changes`, undefined, 'feed-token-example,').map((feed) => feed.token)
       ).toEqual(['feed-token-example', undefined])
     })
   })
 
   describe('and the number of tokens does not match the feeds', () => {
     it('should throw an InvalidWorldsChangesConfigError', () => {
-      expect(() => parseWorldsChangesFeeds(FEED_URL, undefined, allowedHosts, 'a,b')).toThrow(
-        InvalidWorldsChangesConfigError
-      )
+      expect(() => parse(FEED_URL, undefined, 'a,b')).toThrow(InvalidWorldsChangesConfigError)
     })
   })
 
   describe('and a token has invalid characters', () => {
     it('should throw an error that does not contain the token', () => {
-      expect(() => parseWorldsChangesFeeds(FEED_URL, undefined, allowedHosts, 'feed token example')).toThrow(
+      expect(() => parse(FEED_URL, undefined, 'feed token example')).toThrow(
         /^(?!.*feed token example).*entry 1 has invalid characters/
       )
     })
@@ -150,9 +165,33 @@ describe('when parsing the worlds changes feed configuration', () => {
 
   describe('and two feeds share a host', () => {
     it('should throw an InvalidWorldsChangesConfigError', () => {
-      expect(() =>
-        parseWorldsChangesFeeds(`${FEED_URL},https://${HOST}/other/changes`, undefined, allowedHosts)
-      ).toThrow(InvalidWorldsChangesConfigError)
+      expect(() => parse(`${FEED_URL},https://${HOST}/other/changes`)).toThrow(InvalidWorldsChangesConfigError)
+    })
+  })
+})
+
+describe('when normalizing a source origin', () => {
+  describe('and the origin has mixed case and a trailing slash', () => {
+    it('should return the lowercase origin without the slash', () => {
+      expect(toBareHttpsOrigin('HTTPS://Worlds-Content-Server.DCL.dev/')).toBe(SOURCE_URL)
+    })
+  })
+
+  describe('and the url has a path', () => {
+    it('should reject it', () => {
+      expect(toBareHttpsOrigin(`${SOURCE_URL}/worlds-content-server`)).toBeUndefined()
+    })
+  })
+
+  describe('and the url has an empty query', () => {
+    it('should reject it', () => {
+      expect(toBareHttpsOrigin(`${SOURCE_URL}/?`)).toBeUndefined()
+    })
+  })
+
+  describe('and the url is not https', () => {
+    it('should reject it', () => {
+      expect(toBareHttpsOrigin(`http://${HOST}`)).toBeUndefined()
     })
   })
 })
@@ -167,9 +206,11 @@ describe('when running the worlds change relay', () => {
   beforeEach(() => {
     configValues = {
       ALLOWED_CONTENT_SERVER_HOSTS: `${HOST},peer.decentraland.org`,
+      ALLOWED_WORLDS_CONTENT_SERVER_HOSTS: HOST,
       WORLDS_CHANGES_URLS: FEED_URL,
       WORLDS_CHANGES_POLL_INTERVAL_MS: '1',
-      WORLDS_CHANGES_MAX_BACKOFF_MS: '2'
+      WORLDS_CHANGES_MAX_BACKOFF_MS: '2',
+      WORLDS_CHANGES_HALT_BACKOFF_MS: '3'
     }
     storage = createInMemoryStorage()
     worldsChangesClient = { fetchChanges: jest.fn() }
@@ -370,7 +411,13 @@ describe('when running the worlds change relay', () => {
     beforeEach(async () => {
       worldsChangesClient.fetchChanges
         .mockResolvedValueOnce({
-          changes: [{ cursor: '10:1', event: deploymentEvent('bafyA', ['https://evil.example.com']), attributes: {} }],
+          changes: [
+            {
+              cursor: '10:1',
+              event: deploymentEvent('bafyA', [SOURCE_URL, 'https://evil.example.com']),
+              attributes: {}
+            }
+          ],
           next: null
         })
         .mockImplementation(blockUntilAborted)
@@ -379,6 +426,152 @@ describe('when running the worlds change relay', () => {
 
     it('should not publish it', () => {
       expect(snsEventPublisher.publishRawMessage).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('and ALLOWED_WORLDS_CONTENT_SERVER_HOSTS is unset', () => {
+    beforeEach(() => {
+      delete configValues.ALLOWED_WORLDS_CONTENT_SERVER_HOSTS
+    })
+
+    it('should fail to create', async () => {
+      await expect(createRelay()).rejects.toThrow(/ALLOWED_WORLDS_CONTENT_SERVER_HOSTS/)
+    })
+  })
+
+  describe('and the page limit exceeds 1000', () => {
+    beforeEach(() => {
+      configValues.WORLDS_CHANGES_PAGE_LIMIT = '1001'
+    })
+
+    it('should fail to create with an InvalidWorldsChangesConfigError', async () => {
+      await expect(createRelay()).rejects.toBeInstanceOf(InvalidWorldsChangesConfigError)
+    })
+  })
+
+  describe('and a deployment comes from a different content server than the feed source', () => {
+    beforeEach(async () => {
+      worldsChangesClient.fetchChanges
+        .mockResolvedValueOnce({
+          changes: [
+            { cursor: '10:1', event: deploymentEvent('bafyA'), attributes: {} },
+            {
+              cursor: '10:2',
+              event: deploymentEvent('bafyB', ['https://other-worlds.dcl.dev/']),
+              attributes: {}
+            }
+          ],
+          next: null
+        })
+        .mockImplementation(blockUntilAborted)
+      await runUntilFetched(2)
+    })
+
+    it('should publish only the change before it', () => {
+      expect(snsEventPublisher.publishRawMessage).toHaveBeenCalledTimes(1)
+    })
+
+    it('should persist the cursor of the change before it', async () => {
+      expect(await readCursor(storage)).toBe('10:1')
+    })
+
+    it('should poll again from the change before it', () => {
+      expect(worldsChangesClient.fetchChanges).toHaveBeenNthCalledWith(
+        2,
+        FEED_URL,
+        expect.objectContaining({ after: '10:1' })
+      )
+    })
+
+    it('should count the halt as a source mismatch', () => {
+      expect(metricsMock.increment).toHaveBeenCalledWith('worlds_changes_relay_halted', {
+        feed: HOST,
+        reason: 'source_mismatch'
+      })
+    })
+  })
+
+  describe.each([401, 403, 409, 410])('and the feed answers %i', (status: number) => {
+    beforeEach(async () => {
+      await storage.storeStream(CURSOR_KEY, Readable.from([Buffer.from('7:3')]))
+      worldsChangesClient.fetchChanges
+        .mockRejectedValueOnce(new WorldsChangesHttpError(FEED_URL, status))
+        .mockImplementation(blockUntilAborted)
+      await runUntilFetched(2)
+    })
+
+    it('should count the halt by status', () => {
+      expect(metricsMock.increment).toHaveBeenCalledWith('worlds_changes_relay_halted', {
+        feed: HOST,
+        reason: `http_${status}`
+      })
+    })
+
+    it('should poll again from the same cursor', () => {
+      expect(worldsChangesClient.fetchChanges).toHaveBeenNthCalledWith(
+        2,
+        FEED_URL,
+        expect.objectContaining({ after: '7:3' })
+      )
+    })
+
+    it('should keep the stored cursor', async () => {
+      expect(await readCursor(storage)).toBe('7:3')
+    })
+  })
+
+  describe('and the feed answers 503', () => {
+    beforeEach(async () => {
+      worldsChangesClient.fetchChanges
+        .mockRejectedValueOnce(new WorldsChangesHttpError(FEED_URL, 503))
+        .mockImplementation(blockUntilAborted)
+      await runUntilFetched(2)
+    })
+
+    it('should count it as a poll failure', () => {
+      expect(metricsMock.increment).toHaveBeenCalledWith('worlds_changes_relay_failure', {
+        feed: HOST,
+        operation: 'poll',
+        error: 'WorldsChangesHttpError'
+      })
+    })
+  })
+
+  describe.each(['.x', 'x.', 'a..b', 'AWS.x'])('and a feed attribute is named %s', (name: string) => {
+    beforeEach(async () => {
+      worldsChangesClient.fetchChanges
+        .mockResolvedValueOnce({
+          changes: [{ cursor: '10:1', event: deploymentEvent('bafyA'), attributes: { [name]: 'v' } }],
+          next: null
+        })
+        .mockImplementation(blockUntilAborted)
+      await runUntilFetched(2)
+    })
+
+    it('should drop the change for invalid attributes', () => {
+      expect(metricsMock.increment).toHaveBeenCalledWith('worlds_changes_dropped', {
+        feed: HOST,
+        reason: 'invalid_attributes'
+      })
+    })
+  })
+
+  describe('and a feed attribute name has inner dots', () => {
+    beforeEach(async () => {
+      worldsChangesClient.fetchChanges
+        .mockResolvedValueOnce({
+          changes: [{ cursor: '10:1', event: deploymentEvent('bafyA'), attributes: { 'a.b': 'v' } }],
+          next: null
+        })
+        .mockImplementation(blockUntilAborted)
+      await runUntilFetched(2)
+    })
+
+    it('should publish it with the attribute', () => {
+      expect(snsEventPublisher.publishRawMessage).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ 'a.b': 'v' })
+      )
     })
   })
 
@@ -420,6 +613,14 @@ describe('when running the worlds change relay', () => {
 
     it('should persist only the cursor of the published change', async () => {
       expect(await readCursor(storage)).toBe('10:1')
+    })
+
+    it('should count the failure as a publish failure', () => {
+      expect(metricsMock.increment).toHaveBeenCalledWith('worlds_changes_relay_failure', {
+        feed: HOST,
+        operation: 'publish',
+        error: 'Error'
+      })
     })
 
     it('should retry from the last published change', () => {

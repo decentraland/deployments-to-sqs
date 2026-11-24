@@ -11,7 +11,7 @@ import {
 import { FetchChangesOptions, IWorldsChangesClientComponent, WorldsChange, WorldsChangesPage } from './types'
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 15_000
-// A page of 100 changes at the 256 KiB SNS ceiling each is 25 MiB.
+// The producer ends a page at an 8 MiB serialized byte budget, whatever the limit.
 const DEFAULT_MAX_RESPONSE_BYTES = 32 * 1024 * 1024
 
 /**

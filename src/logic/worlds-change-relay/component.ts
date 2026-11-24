@@ -4,9 +4,14 @@ import { START_COMPONENT, STOP_COMPONENT } from '@well-known-components/interfac
 import { AppComponents } from '../../types'
 import { getPositiveInt } from '../tuning'
 import { isAllowedContentServerUrl, parseAllowedContentServerHosts } from '../validation'
-import { isValidWorldsChangesCursor, WorldsChange } from '../../adapters/worlds-changes-client'
-import { InvalidStoredCursorError, InvalidWorldsChangesConfigError } from './errors'
-import { IWorldsChangeRelayComponent, WorldsChangeDropReason, WorldsChangesFeed } from './types'
+import { isValidWorldsChangesCursor, WorldsChange, WorldsChangesHttpError } from '../../adapters/worlds-changes-client'
+import { InvalidStoredCursorError, InvalidWorldsChangesConfigError, WorldsChangesSourceMismatchError } from './errors'
+import {
+  IWorldsChangeRelayComponent,
+  WorldsChangeDropReason,
+  WorldsChangesFeed,
+  WorldsChangesFeedsConfig
+} from './types'
 
 const WORLD_EVENT_TYPE = 'world'
 
@@ -27,8 +32,13 @@ const SNS_MAX_MESSAGE_BYTES = 262_144
 /** SNS allows 10 attributes; three are ours (type, subType, sourceContentServerUrl). */
 const MAX_FEED_ATTRIBUTES = 7
 const MAX_ATTRIBUTE_VALUE_LENGTH = 1024
-const ATTRIBUTE_NAME = /^(?!(?:aws|amazon)\.)[A-Za-z0-9_\-.]{1,256}$/i
+// SNS rules: no AWS./Amazon. prefix, no leading/trailing dot, no "..".
+const ATTRIBUTE_NAME = /^(?!(?:aws|amazon)\.)(?!.*\.\.)[A-Za-z0-9_-](?:[A-Za-z0-9_\-.]{0,254}[A-Za-z0-9_-])?$/i
 const RESERVED_ATTRIBUTES = new Set(['type', 'subType', 'sourceContentServerUrl'])
+/** The producer's maximum `limit`. */
+const MAX_PAGE_LIMIT = 1000
+/** Feed statuses that need an operator (token, or cursor reset); retrying sooner cannot fix them. */
+const HALT_STATUSES = new Set([401, 403, 409, 410])
 
 type ValidatedChange =
   | { kind: 'publish'; subType: string; message: string; attributes: Record<string, string> }
@@ -49,6 +59,26 @@ function parseList(raw: string | undefined): string[] {
     .filter((entry) => entry.length > 0)
 }
 
+/**
+ * Normalizes a bare https origin (`https://<host>`, lowercased; a trailing `/` is tolerated).
+ *
+ * @param raw - Candidate origin.
+ * @returns `https://<host>`, or undefined when `raw` has a path, port, query, fragment or credentials.
+ */
+export function toBareHttpsOrigin(raw: string): string | undefined {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return undefined
+  }
+  if (url.protocol !== 'https:' || url.port || url.username || url.password) return undefined
+  if (url.pathname !== '/' || url.search || url.hash || /[?#]/.test(raw)) return undefined
+  // URL drops the default port; reject one written out.
+  if (/^https:\/\/[^/]*:\d*(?:\/|$)/i.test(raw.trim())) return undefined
+  return `https://${url.hostname.toLowerCase()}`
+}
+
 function assertPlainHttpsUrl(raw: string, allowedHosts: Set<string>, name: string): URL {
   if (!isAllowedContentServerUrl(raw, allowedHosts)) {
     throw new InvalidWorldsChangesConfigError(`${name} entry ${raw} is not an allowlisted HTTPS URL`)
@@ -63,24 +93,19 @@ function assertPlainHttpsUrl(raw: string, allowedHosts: Set<string>, name: strin
 /**
  * Parses the relay's feed configuration.
  *
- * `sourceContentServerUrl` defaults to the feed URL minus its trailing `/changes` (a feed at
- * `https://worlds-content-server.dcl.dev/changes` sources `https://worlds-content-server.dcl.dev`).
- * WORLDS_CHANGES_SOURCE_URLS overrides it positionally, for a feed served under a different base
- * (e.g. `https://dcl.dev/worlds-content-server/changes`).
+ * `sourceContentServerUrl` is a bare origin (`https://<host>`). It defaults to the feed URL minus its
+ * trailing `/changes` (a feed at `https://worlds-content-server.dcl.dev/changes` sources
+ * `https://worlds-content-server.dcl.dev`). WORLDS_CHANGES_SOURCE_URLS overrides it positionally, for
+ * a feed served under a different base (e.g. `https://dcl.dev/worlds-content-server/changes`, whose
+ * derived source has a path and is therefore rejected).
  *
- * @param rawUrls - WORLDS_CHANGES_URLS.
- * @param rawSourceUrls - WORLDS_CHANGES_SOURCE_URLS.
- * @param rawTokens - WORLDS_CHANGES_TOKENS: one bearer token per feed, positional; an empty entry sends none.
- * @param allowedHosts - Parsed ALLOWED_CONTENT_SERVER_HOSTS.
+ * @param feedsConfig - Raw env values and the parsed allowlists.
  * @returns The feeds; empty when WORLDS_CHANGES_URLS is unset or blank.
- * @throws InvalidWorldsChangesConfigError on a non-allowlisted, malformed or duplicated entry.
+ * @throws InvalidWorldsChangesConfigError on a non-allowlisted, malformed or duplicated entry, or a
+ *   source that is not a bare https origin.
  */
-export function parseWorldsChangesFeeds(
-  rawUrls: string | undefined,
-  rawSourceUrls: string | undefined,
-  allowedHosts: Set<string>,
-  rawTokens?: string
-): WorldsChangesFeed[] {
+export function parseWorldsChangesFeeds(feedsConfig: WorldsChangesFeedsConfig): WorldsChangesFeed[] {
+  const { rawUrls, rawSourceUrls, rawTokens, allowedHosts, allowedWorldsHosts } = feedsConfig
   const urls = parseList(rawUrls)
   const sourceUrls = parseList(rawSourceUrls)
   if (sourceUrls.length > 0 && sourceUrls.length !== urls.length) {
@@ -111,15 +136,21 @@ export function parseWorldsChangesFeeds(
     }
     seenHosts.add(url.hostname)
 
-    const source =
-      sourceUrls.length > 0
-        ? assertPlainHttpsUrl(sourceUrls[index], allowedHosts, 'WORLDS_CHANGES_SOURCE_URLS')
-        : new URL(`${url.origin}${path.slice(0, -'/changes'.length)}`)
+    const rawSource = sourceUrls.length > 0 ? sourceUrls[index] : `${url.origin}${path.slice(0, -'/changes'.length)}`
+    const source = toBareHttpsOrigin(rawSource)
+    if (!source) {
+      throw new InvalidWorldsChangesConfigError(
+        `source ${rawSource} for feed ${url.origin}${path} is not a bare https origin; set WORLDS_CHANGES_SOURCE_URLS`
+      )
+    }
+    if (!allowedWorldsHosts.has(new URL(source).hostname)) {
+      throw new InvalidWorldsChangesConfigError(`source ${source} is not in ALLOWED_WORLDS_CONTENT_SERVER_HOSTS`)
+    }
 
     return {
       url: `${url.origin}${path}`,
       host: url.hostname,
-      sourceContentServerUrl: `${source.origin}${source.pathname.replace(/\/+$/, '')}`,
+      sourceContentServerUrl: source,
       ...(tokens[index] ? { token: tokens[index] } : {})
     }
   })
@@ -142,7 +173,11 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 
 /**
  * Creates the worlds change relay: one polling loop per WORLDS_CHANGES_URLS feed that forwards
- * worlds-content-server events, byte for byte, to EVENTS_SNS_ARN.
+ * worlds-content-server events to EVENTS_SNS_ARN. Bodies are re-serialized with `JSON.stringify`:
+ * semantically unchanged, not byte-identical.
+ *
+ * Delivery is at-least-once: a restart, a failed cursor write or two tasks briefly overlapping in a
+ * rolling deploy can publish a change again, so consumers must be idempotent.
  *
  * Per feed:
  * 1. Load the cursor from `worlds-changes-cursor-<host>` in the bucket (absent = oldest retained row).
@@ -152,10 +187,14 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
  *    `subType`, the feed's attributes and `sourceContentServerUrl`; a change that fails validation
  *    is dropped and skipped. The in-memory cursor moves past a change only once it is published
  *    or dropped.
- * 4. Persist the cursor after the page, or when a publish fails (at-least-once delivery).
+ * 4. Persist the cursor after the page, or when a publish fails.
  * 5. Fetch again at once while the page made progress and `next` is set, else wait
  *    WORLDS_CHANGES_POLL_INTERVAL_MS; on any failure back off exponentially up to
  *    WORLDS_CHANGES_MAX_BACKOFF_MS and retry from the last cursor.
+ * 6. Halt conditions never advance the cursor and retry only every WORLDS_CHANGES_HALT_BACKOFF_MS:
+ *    a deployment whose `contentServerUrls[0]` origin is not the feed source (`source_mismatch`),
+ *    and feed statuses 401/403 (token) and 409/410 (foreign cursor or retention gap; an operator
+ *    resets the cursor object).
  *
  * @param components - Config, logs, metrics, bucket storage, the feed client and the events publisher.
  * @returns The relay; inert (nothing started) when WORLDS_CHANGES_URLS is unset or blank.
@@ -177,15 +216,26 @@ export async function createWorldsChangeRelayComponent(
   }
 
   const allowedHosts = parseAllowedContentServerHosts(await config.requireString('ALLOWED_CONTENT_SERVER_HOSTS'))
-  const feeds = parseWorldsChangesFeeds(
-    rawUrls,
-    await config.getString('WORLDS_CHANGES_SOURCE_URLS'),
-    allowedHosts,
-    await config.getString('WORLDS_CHANGES_TOKENS')
+  const allowedWorldsHosts = parseAllowedContentServerHosts(
+    await config.requireString('ALLOWED_WORLDS_CONTENT_SERVER_HOSTS')
   )
+  if (allowedWorldsHosts.size === 0) {
+    throw new InvalidWorldsChangesConfigError('ALLOWED_WORLDS_CONTENT_SERVER_HOSTS is empty')
+  }
+  const feeds = parseWorldsChangesFeeds({
+    rawUrls,
+    rawSourceUrls: await config.getString('WORLDS_CHANGES_SOURCE_URLS'),
+    rawTokens: await config.getString('WORLDS_CHANGES_TOKENS'),
+    allowedHosts,
+    allowedWorldsHosts
+  })
   const pollIntervalMs = await getPositiveInt(config, 'WORLDS_CHANGES_POLL_INTERVAL_MS', 5_000)
   const maxBackoffMs = await getPositiveInt(config, 'WORLDS_CHANGES_MAX_BACKOFF_MS', 60_000)
+  const haltBackoffMs = await getPositiveInt(config, 'WORLDS_CHANGES_HALT_BACKOFF_MS', 300_000)
   const pageLimit = await getPositiveInt(config, 'WORLDS_CHANGES_PAGE_LIMIT', 100)
+  if (pageLimit > MAX_PAGE_LIMIT) {
+    throw new InvalidWorldsChangesConfigError(`WORLDS_CHANGES_PAGE_LIMIT must be <= ${MAX_PAGE_LIMIT}`)
+  }
   const maxMessageBytes = await getPositiveInt(config, 'WORLDS_CHANGES_MAX_MESSAGE_BYTES', SNS_MAX_MESSAGE_BYTES)
   if (maxMessageBytes > SNS_MAX_MESSAGE_BYTES) {
     throw new InvalidWorldsChangesConfigError(`WORLDS_CHANGES_MAX_MESSAGE_BYTES must be <= ${SNS_MAX_MESSAGE_BYTES}`)
@@ -207,16 +257,18 @@ export async function createWorldsChangeRelayComponent(
       if (!Array.isArray(urls) || urls.length === 0 || !urls.every((url) => typeof url === 'string')) {
         return { kind: 'drop', reason: 'invalid_event' }
       }
-      if (!urls.every((url) => isAllowedContentServerUrl(url, allowedHosts))) {
-        return { kind: 'drop', reason: 'disallowed_content_server' }
+      let origin: string
+      try {
+        origin = new URL(urls[0]).origin.toLowerCase()
+      } catch {
+        return { kind: 'drop', reason: 'invalid_event' }
       }
-      if (!urls.some((url) => url.replace(/\/+$/, '') === feed.sourceContentServerUrl)) {
-        // Consumers fetch from the body's own URLs, so a mismatch only signals a misconfigured source.
-        logger.warn('Deployment contentServerUrls do not include the feed source URL', {
-          feed: feed.host,
-          cursor: change.cursor,
-          sourceContentServerUrl: feed.sourceContentServerUrl
-        })
+      // Consumers record the deploy under contentServerUrls[0] but scope removals by the attribute.
+      if (origin !== feed.sourceContentServerUrl) {
+        throw new WorldsChangesSourceMismatchError(change.cursor, origin)
+      }
+      if (!urls.every((url) => isAllowedContentServerUrl(url, allowedWorldsHosts))) {
+        return { kind: 'drop', reason: 'disallowed_content_server' }
       }
     }
 
@@ -270,6 +322,16 @@ export async function createWorldsChangeRelayComponent(
 
   async function runFeed(feed: WorldsChangesFeed, signal: AbortSignal): Promise<void> {
     let failures = 0
+    const halt = async (reason: string, details: Record<string, string | number>): Promise<void> => {
+      logger.error('Worlds change relay halted; the cursor is not advanced', {
+        feed: feed.host,
+        reason,
+        retryInMs: haltBackoffMs,
+        ...details
+      })
+      metrics.increment('worlds_changes_relay_halted', { feed: feed.host, reason })
+      await sleep(haltBackoffMs, signal)
+    }
     const backOff = async (operation: string, error: unknown): Promise<void> => {
       failures++
       const delay = Math.min(pollIntervalMs * 2 ** (failures - 1), maxBackoffMs)
@@ -311,6 +373,7 @@ export async function createWorldsChangeRelayComponent(
     while (!signal.aborted) {
       let caughtUp = true
       const cursorBeforePage = cursor
+      let operation = 'poll'
       try {
         const page = await worldsChangesClient.fetchChanges(feed.url, {
           after: cursor,
@@ -323,7 +386,9 @@ export async function createWorldsChangeRelayComponent(
             if (signal.aborted) break
             const validated = validateChange(change, feed)
             if (validated.kind === 'publish') {
+              operation = 'publish'
               await snsEventPublisher.publishRawMessage(validated.message, validated.attributes)
+              operation = 'poll'
               metrics.increment('worlds_changes_relayed', { feed: feed.host, subType: validated.subType })
             } else {
               logger.warn('Dropping worlds change', {
@@ -337,14 +402,27 @@ export async function createWorldsChangeRelayComponent(
           }
         } finally {
           // Persist whatever was published, also when a publish failed mid-page.
+          const failedOperation = operation
+          operation = 'save_cursor'
           await persist()
+          operation = failedOperation
         }
         // A page that did not move the cursor waits too, so a stuck producer cannot hot-loop us.
         caughtUp = page.next === null || cursor === cursorBeforePage
         failures = 0
       } catch (error: unknown) {
         if (signal.aborted) break
-        await backOff('poll', error)
+        if (error instanceof WorldsChangesSourceMismatchError) {
+          await halt('source_mismatch', {
+            cursor: error.cursor,
+            origin: error.origin,
+            sourceContentServerUrl: feed.sourceContentServerUrl
+          })
+        } else if (error instanceof WorldsChangesHttpError && HALT_STATUSES.has(error.status)) {
+          await halt(`http_${error.status}`, { status: error.status })
+        } else {
+          await backOff(operation, error)
+        }
         continue
       }
       if (caughtUp) await sleep(pollIntervalMs, signal)

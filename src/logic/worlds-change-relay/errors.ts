@@ -11,3 +11,10 @@ export class InvalidStoredCursorError extends Error {
     this.name = 'InvalidStoredCursorError'
   }
 }
+
+export class WorldsChangesSourceMismatchError extends Error {
+  constructor(public readonly cursor: string, public readonly origin: string) {
+    super(`Deployment at ${cursor} has contentServerUrls[0] origin ${origin}, not the feed source`)
+    this.name = 'WorldsChangesSourceMismatchError'
+  }
+}
