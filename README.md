@@ -114,6 +114,8 @@ yarn seed-snapshot-markers https://dcl.dev/content --bucket <bucket> --apply
 
 `--bucket` uses `AWS_REGION` and the AWS credentials from the environment. It never falls back to `BUCKET`. Use `--folder <path>` to seed a local folder storage instead.
 
+Run it immediately before deploying the new `CONTENT_SERVER_URLS`, then re-run the dry run to confirm 0 markers would be written: a snapshot the server publishes in between has no marker and is backfilled. The script exits non-zero when the server lists no valid snapshots, and `--apply` refuses to write when any entry is invalid. Export `ALLOWED_CONTENT_SERVER_HOSTS` (the target environment's value) to reject a server outside it; `.env.default` is not read for this check.
+
 ## Testing
 
 This service includes comprehensive test coverage with both unit and integration tests.

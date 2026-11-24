@@ -1,8 +1,10 @@
 import { Readable } from 'stream'
 import { createInMemoryStorage, IContentStorageComponent } from '@dcl/catalyst-storage'
 import {
+  assertAllowedContentServer,
   fetchSnapshotHashes,
   formatReport,
+  listingProblem,
   parseSeedArgs,
   SeedOptions,
   seedSnapshotMarkers,
@@ -66,6 +68,68 @@ describe('when parsing the seed script arguments', () => {
   })
 })
 
+describe('when checking the content server against the allowlist', () => {
+  let rawAllowedHosts: string | undefined
+
+  describe('and ALLOWED_CONTENT_SERVER_HOSTS is not set', () => {
+    beforeEach(() => {
+      rawAllowedHosts = undefined
+    })
+
+    it('should accept any server', () => {
+      expect(() => assertAllowedContentServer('https://dcl.dev/content', rawAllowedHosts)).not.toThrow()
+    })
+  })
+
+  describe('and the host is on ALLOWED_CONTENT_SERVER_HOSTS', () => {
+    beforeEach(() => {
+      rawAllowedHosts = 'peer.decentraland.org,dcl.dev'
+    })
+
+    it('should accept it', () => {
+      expect(() => assertAllowedContentServer('https://dcl.dev/content', rawAllowedHosts)).not.toThrow()
+    })
+  })
+
+  describe('and the host is not on ALLOWED_CONTENT_SERVER_HOSTS', () => {
+    beforeEach(() => {
+      rawAllowedHosts = 'peer.decentraland.org'
+    })
+
+    it('should throw a usage error', () => {
+      expect(() => assertAllowedContentServer('https://dcl.dev/content', rawAllowedHosts)).toThrow(UsageError)
+    })
+  })
+})
+
+describe('when checking a snapshot listing', () => {
+  describe('and no valid snapshot is listed', () => {
+    it('should report a problem even in a dry run', () => {
+      expect(listingProblem({ hashes: [], invalid: 0 }, false)).toMatch(/no valid snapshots/)
+    })
+  })
+
+  describe('and some entries are invalid', () => {
+    describe('and it is a dry run', () => {
+      it('should report no problem', () => {
+        expect(listingProblem({ hashes: ['bafyone'], invalid: 1 }, false)).toBeUndefined()
+      })
+    })
+
+    describe('and --apply is given', () => {
+      it('should refuse to write', () => {
+        expect(listingProblem({ hashes: ['bafyone'], invalid: 1 }, true)).toMatch(/refusing to write/)
+      })
+    })
+  })
+
+  describe('and every entry is valid', () => {
+    it('should report no problem', () => {
+      expect(listingProblem({ hashes: ['bafyone'], invalid: 0 }, true)).toBeUndefined()
+    })
+  })
+})
+
 describe('when fetching the snapshot hashes', () => {
   let fetchMock: jest.Mock
 
@@ -84,6 +148,11 @@ describe('when fetching the snapshot hashes', () => {
         invalid: 1
       })
       expect(fetchMock).toHaveBeenCalledWith('https://dcl.dev/content/snapshots', expect.anything())
+    })
+
+    it('should refuse to follow redirects', async () => {
+      await fetchSnapshotHashes(fetchMock, 'https://dcl.dev/content')
+      expect(fetchMock).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ redirect: 'error' }))
     })
   })
 
@@ -104,6 +173,13 @@ describe('when fetching the snapshot hashes', () => {
 
     it('should throw a not-JSON error', async () => {
       await expect(fetchSnapshotHashes(fetchMock, 'https://dcl.dev/content')).rejects.toThrow('did not return JSON')
+    })
+
+    it('should keep the parse error as the cause', async () => {
+      await expect(fetchSnapshotHashes(fetchMock, 'https://dcl.dev/content')).rejects.toHaveProperty(
+        'cause',
+        expect.objectContaining({ name: 'SyntaxError' })
+      )
     })
   })
 })

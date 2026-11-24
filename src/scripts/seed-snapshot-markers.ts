@@ -15,9 +15,10 @@ import {
   createFsComponent,
   IContentStorageComponent
 } from '@dcl/catalyst-storage'
-import { createDotEnvConfigComponent } from '@well-known-components/env-config-provider'
+import { createConfigComponent, createDotEnvConfigComponent } from '@well-known-components/env-config-provider'
 import { createLogComponent } from '@well-known-components/logger'
-import { parseSnapshotHashes, snapshotMarkerKey } from '../logic/snapshot-markers'
+import { ParsedSnapshotHashes, parseSnapshotHashes, snapshotMarkerKey } from '../logic/snapshot-markers'
+import { isAllowedContentServerUrl, parseAllowedContentServerHosts } from '../logic/validation'
 
 const SNAPSHOTS_TIMEOUT_MS = 30_000
 
@@ -25,6 +26,13 @@ export class UsageError extends Error {
   constructor(message: string) {
     super(message)
     this.name = 'UsageError'
+  }
+}
+
+export class SnapshotsListingError extends Error {
+  constructor(message: string, public readonly cause?: unknown) {
+    super(message)
+    this.name = 'SnapshotsListingError'
   }
 }
 
@@ -98,6 +106,42 @@ export function parseSeedArgs(argv: string[]): SeedOptions {
 }
 
 /**
+ * Checks the content server against ALLOWED_CONTENT_SERVER_HOSTS when that variable is set in the
+ * environment: markers are keyed by hash only, so seeding from the wrong server skips real backfills.
+ *
+ * @param contentServerUrl - The validated content server URL.
+ * @param rawAllowedHosts - ALLOWED_CONTENT_SERVER_HOSTS from the environment, if set.
+ * @throws UsageError when the variable is set and the host is not on it.
+ */
+export function assertAllowedContentServer(contentServerUrl: string, rawAllowedHosts: string | undefined): void {
+  if (!rawAllowedHosts || rawAllowedHosts.trim() === '') return
+  const allowedHosts = parseAllowedContentServerHosts(rawAllowedHosts)
+  const { hostname, protocol } = new URL(contentServerUrl)
+  // Loopback over http stays allowed for local rehearsals.
+  const isLocal = protocol === 'http:'
+  if (!isLocal && !isAllowedContentServerUrl(contentServerUrl, allowedHosts)) {
+    throw new UsageError(`${hostname} is not in ALLOWED_CONTENT_SERVER_HOSTS`)
+  }
+}
+
+/**
+ * Explains why a listing must not be seeded as is.
+ *
+ * @param listing - The parsed `/snapshots` response.
+ * @param apply - Whether the run would write.
+ * @returns The problem, or undefined when the listing can be used.
+ */
+export function listingProblem(listing: ParsedSnapshotHashes, apply: boolean): string | undefined {
+  if (listing.hashes.length === 0) {
+    return 'The server listed no valid snapshots; adding it would replay its pointer changes from the start.'
+  }
+  if (apply && listing.invalid > 0) {
+    return `The server listed ${listing.invalid} invalid snapshot entries; refusing to write an incomplete seed.`
+  }
+  return undefined
+}
+
+/**
  * Fetches `<contentServerUrl>/snapshots` and extracts the valid snapshot hashes.
  *
  * @param fetchFn - The fetch implementation.
@@ -110,7 +154,8 @@ export async function fetchSnapshotHashes(
   contentServerUrl: string
 ): Promise<ReturnType<typeof parseSnapshotHashes>> {
   const url = `${contentServerUrl}/snapshots`
-  const response = await fetchFn(url, { signal: AbortSignal.timeout(SNAPSHOTS_TIMEOUT_MS) })
+  // No redirects: one could leave the checked host or downgrade to http.
+  const response = await fetchFn(url, { redirect: 'error', signal: AbortSignal.timeout(SNAPSHOTS_TIMEOUT_MS) })
   if (!response.ok) {
     await response.body?.cancel()
     throw new Error(`GET ${url} failed with status: ${response.status}`)
@@ -119,8 +164,9 @@ export async function fetchSnapshotHashes(
   let body: unknown
   try {
     body = await response.json()
-  } catch {
-    throw new Error(`GET ${url} did not return JSON`)
+  } catch (error: unknown) {
+    const reason = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+    throw new SnapshotsListingError(`GET ${url} did not return JSON (${reason})`, error)
   }
   return parseSnapshotHashes(body)
 }
@@ -179,6 +225,9 @@ export function formatReport(options: SeedOptions, report: SeedReport): string[]
     `Content server: ${options.contentServerUrl}`,
     `Target: ${target}`,
     `Snapshots listed: ${report.listed} valid, ${report.invalid} invalid (skipped)`,
+    ...(report.invalid > 0
+      ? [`WARNING: ${report.invalid} invalid entries cannot be marked; the seed may be incomplete.`]
+      : []),
     `Markers already present: ${report.existing.length}`,
     ...report.existing.map((hash) => `  exists  ${snapshotMarkerKey(hash)}`)
   ]
@@ -235,7 +284,23 @@ async function main(): Promise<number> {
     return 2
   }
 
-  const { hashes, invalid } = await fetchSnapshotHashes(fetch, options.contentServerUrl)
+  try {
+    // The real environment only: .env.default would always set it.
+    const env = createConfigComponent(process.env)
+    assertAllowedContentServer(options.contentServerUrl, await env.getString('ALLOWED_CONTENT_SERVER_HOSTS'))
+  } catch (error: unknown) {
+    process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
+    return 2
+  }
+
+  const listing = await fetchSnapshotHashes(fetch, options.contentServerUrl)
+  const problem = listingProblem(listing, options.apply)
+  if (problem) {
+    process.stderr.write(`${problem}\n`)
+    return 1
+  }
+
+  const { hashes, invalid } = listing
   const storage = await createStorage(options)
   try {
     await storage.start?.({ started: () => true, live: () => true, getComponents: () => ({}) })
@@ -243,7 +308,12 @@ async function main(): Promise<number> {
     formatReport(options, { listed: hashes.length, invalid, ...result }).forEach(print)
     return result.unconfirmed.length > 0 ? 1 : 0
   } finally {
-    await storage.stop?.()
+    try {
+      await storage.stop?.()
+    } catch (error: unknown) {
+      // Never hide the run's own outcome or error.
+      process.stderr.write(`Failed to stop the storage: ${error instanceof Error ? error.message : String(error)}\n`)
+    }
   }
 }
 
