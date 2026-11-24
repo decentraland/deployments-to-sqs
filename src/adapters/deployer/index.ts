@@ -132,7 +132,8 @@ export async function createDeployerComponent(
                   return
                 }
 
-                const isNotRetryable = isNonRetryableErrorMessage(error?.message)
+                // Publish (SNS) errors rarely carry `status: NNN`, so this is mostly false here.
+                const isNonRetryable = isNonRetryableErrorMessage(error?.message)
 
                 logger.error('Failed to publish entity', {
                   entityId: entity.entityId,
@@ -142,17 +143,18 @@ export async function createDeployerComponent(
                 })
 
                 components.metrics.increment('entity_deployment_failure', {
-                  retryable: isNotRetryable ? 'false' : 'true',
+                  retryable: isNonRetryable ? 'false' : 'true',
                   entityType: entityTypeLabel
                 })
 
                 // Unpublished: drop the stored entity file so a retry isn't skipped as "already stored".
-                // Once published, keeping it avoids announcing the entity twice.
+                // Once published it is kept, but delivery stays at-least-once: a concurrent job for the
+                // same entity, or a publish that reached only one topic, can announce it again.
                 if (!published) {
                   await components.entityDownloader.discardEntityFile(entity)
                 }
 
-                if (isNotRetryable) {
+                if (isNonRetryable) {
                   logger.error('Failed to download entity', {
                     entityId: entity.entityId,
                     entityType: entity.entityType,

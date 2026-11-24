@@ -4,6 +4,9 @@ import { toEntityTypeLabel } from '../../logic/entity-type-label'
 import { getPositiveInt } from '../../logic/tuning'
 import { isNonRetryableErrorMessage } from '../../logic/retryable'
 
+// snapshots-fetcher keeps a hash-valid stored file that is not entity JSON: it may be legitimate content.
+const LIBRARY_KEPT_STORED_FILE = /the local copy was kept/
+
 export async function createEntityDownloaderComponent(
   components: Pick<AppComponents, 'config' | 'logs' | 'storage' | 'fetch' | 'metrics'>
 ): Promise<EntityDownloaderComponent> {
@@ -62,7 +65,7 @@ export async function createEntityDownloaderComponent(
         logger.error('Failed to download entity', {
           entityId: entity.entityId,
           entityType: entity.entityType,
-          errorMessage: error.message
+          errorMessage: error?.message
         })
 
         const isNonRetryable = isNonRetryableErrorMessage(error?.message)
@@ -74,13 +77,15 @@ export async function createEntityDownloaderComponent(
 
         // The entity file is stored before its content files, so a failure can leave it behind;
         // the deployer's dedup check would then skip every retry and the event would be lost.
-        await discardEntityFile(entity)
+        if (!LIBRARY_KEPT_STORED_FILE.test(error?.message ?? '')) {
+          await discardEntityFile(entity)
+        }
 
         if (isNonRetryable) {
           await markAsDeployed()
         }
 
-        throw new EntityDownloadError(error.message, {
+        throw new EntityDownloadError(error?.message, {
           entity,
           error
         })

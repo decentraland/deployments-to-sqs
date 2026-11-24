@@ -171,6 +171,33 @@ describe('EntityDownloaderComponent', () => {
       })
     })
 
+    describe('and the stored bytes are not entity JSON but snapshots-fetcher kept them', () => {
+      beforeEach(async () => {
+        downloadEntityAndContentFilesMock.mockRejectedValueOnce(
+          new Error(
+            `Failed to parse the downloaded entity file for ${mockEntity.entityId}; the stored bytes match the ` +
+              'content hash, so the local copy was kept. Cause: Unexpected token'
+          )
+        )
+        await expect(downloader.downloadEntity(mockEntity, mockServers)).rejects.toThrow(EntityDownloadError)
+      })
+
+      it('should keep the stored file, which may be legitimate content', () => {
+        expect(storageMock.delete).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('and the download rejects with a non-Error value', () => {
+      beforeEach(async () => {
+        downloadEntityAndContentFilesMock.mockRejectedValueOnce(undefined)
+        await expect(downloader.downloadEntity(mockEntity, mockServers)).rejects.toThrow(EntityDownloadError)
+      })
+
+      it('should still remove the stored entity file', () => {
+        expect(storageMock.delete).toHaveBeenCalledWith([mockEntity.entityId])
+      })
+    })
+
     describe('and removing the stored entity file fails', () => {
       let downloadError: unknown
 
