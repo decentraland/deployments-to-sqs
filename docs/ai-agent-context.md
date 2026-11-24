@@ -10,9 +10,13 @@
 - Publishes deployment events to AWS SNS topic (`deployments-sns-${env}`)
 - Continuously monitors multiple Catalyst nodes in parallel
 - Handles deployment metadata (entity ID, pointers, deployer, timestamp, content server URLs)
+- Optionally relays dcl-one worlds change feeds (`WORLDS_CHANGES_URLS`) to the events SNS topic as
+  worlds-content-server `world/*` events, with a `sourceContentServerUrl` message attribute (a bare
+  https origin on `ALLOWED_WORLDS_CONTENT_SERVER_HOSTS`); the cursor is kept in the bucket as
+  `worlds-changes-cursor-<host>`. Delivery is at-least-once, so consumers must be idempotent
 
 **Communication Pattern:** 
-- Polling-based (periodic GET requests to Catalyst APIs)
+- Polling-based (periodic GET requests to Catalyst APIs and, when enabled, to dcl-one worlds change feeds)
 - Event publishing via AWS SNS (push notifications to subscribers)
 
 **Technology Stack:**
@@ -36,5 +40,15 @@
 2. Detects new deployments (wearables, emotes, scenes)
 3. Publishes deployment event to SNS topic with entity metadata
 4. Subscribers (Asset Bundle Converter, LODs Generator, Asset Bundle Registry) consume events via SQS queues
+
+**Worlds Change Relay Flow (optional, `WORLDS_CHANGES_URLS`):**
+
+1. Service polls each dcl-one worlds change feed (`GET <feed>?after=<cursor>&limit=<n>`) from the cursor
+   stored in the bucket; with no cursor it starts from the oldest retained row
+2. Validates each change and publishes its `world/*` body to the events SNS topic (`EVENTS_SNS_ARN`)
+   with `type`, `subType`, the feed attributes and `sourceContentServerUrl`
+3. Persists the cursor after publishing (at-least-once delivery)
+4. Halts without advancing (error log + `worlds_changes_relay_halted`) when a deployment's
+   `contentServerUrls[0]` origin differs from the feed source, or the feed answers 401/403/409/410
 
 **Deployment Event Schema:** Includes entityId, entityType, pointers, deployer, timestamp, contentServerUrls

@@ -1,5 +1,5 @@
 import { Events } from '@dcl/schemas/dist/platform/events'
-import { AppComponents, SnsPublisherComponent, SnsPublishError } from '../../types'
+import { AppComponents, SnsPublisherComponent, SnsPublishError, SnsRawPublishError } from '../../types'
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns'
 import { DeployableEntity } from '@dcl/snapshots-fetcher'
 import { SnsOptions, SnsType } from './types'
@@ -70,6 +70,36 @@ async function createSnsPublisherComponent(
 
         // TODO: Is this going to change the behavior of the scheduled job?
         throw new SnsPublishError('Failed to publish message', { entity, error })
+      }
+    },
+
+    async publishRawMessage(message: string, attributes: Record<string, string>) {
+      const { type, subType } = attributes
+      try {
+        const receipt = await client.send(
+          new PublishCommand({
+            TopicArn: arn,
+            Message: message,
+            MessageAttributes: Object.fromEntries(
+              Object.entries(attributes).map(([name, value]) => [name, { DataType: 'String', StringValue: value }])
+            )
+          })
+        )
+
+        logger.info(`Raw message of type ${options.type} sent`, {
+          messageId: `${receipt.MessageId}`,
+          type,
+          subType
+        })
+        metrics.increment('sns_publish_success', { type: options.type })
+      } catch (error: unknown) {
+        logger.error('Failed to publish raw message', {
+          type,
+          subType,
+          error: error instanceof Error ? error.message : String(error)
+        })
+        metrics.increment('sns_publish_failure', { type: options.type })
+        throw new SnsRawPublishError('Failed to publish raw message', { type, subType, error })
       }
     }
   }

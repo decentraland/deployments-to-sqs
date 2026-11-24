@@ -75,6 +75,26 @@ export const metricDeclarations = {
     help: 'Count entities skipped because their entityId is not a bare CID (path/key-injection guard)',
     type: IMetricsComponent.CounterType,
     labelNames: ['entityType']
+  },
+  worlds_changes_relayed: {
+    help: 'Count worlds change feed events published to the events SNS topic',
+    type: IMetricsComponent.CounterType,
+    labelNames: ['feed', 'subType']
+  },
+  worlds_changes_dropped: {
+    help: 'Count worlds change feed rows skipped because they failed validation',
+    type: IMetricsComponent.CounterType,
+    labelNames: ['feed', 'reason']
+  },
+  worlds_changes_relay_failure: {
+    help: 'Count worlds change relay failures (load_cursor, poll, publish, save_cursor) that triggered a backoff',
+    type: IMetricsComponent.CounterType,
+    labelNames: ['feed', 'operation', 'error']
+  },
+  worlds_changes_relay_halted: {
+    help: 'Count worlds change relay halts that need an operator (source_mismatch, http_401/403/409/410)',
+    type: IMetricsComponent.CounterType,
+    labelNames: ['feed', 'reason']
   }
 }
 
