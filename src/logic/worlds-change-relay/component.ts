@@ -194,7 +194,7 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
  * 6. Halt conditions never advance the cursor and retry only every WORLDS_CHANGES_HALT_BACKOFF_MS:
  *    a deployment whose `contentServerUrls[0]` origin is not the feed source (`source_mismatch`),
  *    and feed statuses 401/403 (token) and 409/410 (foreign cursor or retention gap; an operator
- *    resets the cursor object).
+ *    resets the cursor object). After a status halt the stored cursor is re-read.
  *
  * @param components - Config, logs, metrics, bucket storage, the feed client and the events publisher.
  * @returns The relay; inert (nothing started) when WORLDS_CHANGES_URLS is unset or blank.
@@ -420,6 +420,13 @@ export async function createWorldsChangeRelayComponent(
           })
         } else if (error instanceof WorldsChangesHttpError && HALT_STATUSES.has(error.status)) {
           await halt(`http_${error.status}`, { status: error.status })
+          // Pick up an operator's cursor reset without a restart.
+          try {
+            cursor = await loadCursor(feed)
+            persistedCursor = cursor
+          } catch (loadError: unknown) {
+            await backOff('load_cursor', loadError)
+          }
         } else {
           await backOff(operation, error)
         }

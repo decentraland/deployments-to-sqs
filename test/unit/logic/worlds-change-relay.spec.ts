@@ -520,6 +520,27 @@ describe('when running the worlds change relay', () => {
     })
   })
 
+  describe('and the feed answers 410 and an operator resets the cursor', () => {
+    beforeEach(async () => {
+      await storage.storeStream(CURSOR_KEY, Readable.from([Buffer.from('7:3')]))
+      worldsChangesClient.fetchChanges
+        .mockImplementationOnce(async () => {
+          await storage.storeStream(CURSOR_KEY, Readable.from([Buffer.from('9:1')]))
+          throw new WorldsChangesHttpError(FEED_URL, 410)
+        })
+        .mockImplementation(blockUntilAborted)
+      await runUntilFetched(2)
+    })
+
+    it('should poll again from the reset cursor', () => {
+      expect(worldsChangesClient.fetchChanges).toHaveBeenNthCalledWith(
+        2,
+        FEED_URL,
+        expect.objectContaining({ after: '9:1' })
+      )
+    })
+  })
+
   describe('and the feed answers 503', () => {
     beforeEach(async () => {
       worldsChangesClient.fetchChanges
