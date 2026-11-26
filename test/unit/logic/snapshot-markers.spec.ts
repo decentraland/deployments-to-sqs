@@ -14,6 +14,24 @@ describe('when building the marker key of a snapshot', () => {
 
 describe('when parsing a /snapshots response', () => {
   let body: unknown
+  const timeRange = { initTimestamp: 0, endTimestamp: 1 }
+
+  it('rejects incomplete metadata even when its hash could be marked', () => {
+    const hash = 'bafyone'
+    const tooFarAhead = Date.now() + 2 * 24 * 60 * 60 * 1000
+    const invalidEntries = [
+      { hash },
+      { hash, timeRange: { initTimestamp: 1, endTimestamp: 0 } },
+      { hash, timeRange: { initTimestamp: -1, endTimestamp: 0 } },
+      { hash, timeRange: { initTimestamp: 0, endTimestamp: 1.5 } },
+      { hash, timeRange: { initTimestamp: 0, endTimestamp: tooFarAhead } },
+      { hash, timeRange, replacedSnapshotHashes: null },
+      { hash, timeRange, replacedSnapshotHashes: ['../invalid'] },
+      { hash, timeRange, replacedSnapshotHashes: Array(1001).fill(hash) }
+    ]
+    const valid = { hash, timeRange, replacedSnapshotHashes: Array(1000).fill('older') }
+    expect(parseSnapshotHashes([valid, ...invalidEntries])).toEqual({ hashes: [hash], invalid: invalidEntries.length })
+  })
 
   describe('and the body is not an array', () => {
     beforeEach(() => {
@@ -30,9 +48,9 @@ describe('when parsing a /snapshots response', () => {
 
     beforeEach(() => {
       body = [
-        { hash: 'bafyone' },
-        { hash: 'bafytwo' },
-        { hash: 'bafyone' },
+        { hash: 'bafyone', timeRange },
+        { hash: 'bafytwo', timeRange },
+        { hash: 'bafyone', timeRange },
         { hash: '../escape' },
         { hash: 'a'.repeat(129) },
         { hash: 42 },

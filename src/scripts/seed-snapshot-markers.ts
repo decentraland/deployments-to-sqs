@@ -63,6 +63,10 @@ function readArgs(argv: string[]) {
   return parseArgs({ args: argv, options: ARG_OPTIONS, allowPositionals: true })
 }
 
+function isLocalHttp(url: URL): boolean {
+  return url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
+}
+
 /**
  * Parses and validates the command line.
  *
@@ -90,11 +94,13 @@ export function parseSeedArgs(argv: string[]): SeedOptions {
   try {
     url = new URL(positionals[0])
   } catch {
-    throw new UsageError(`Invalid content server URL: ${positionals[0]}`)
+    throw new UsageError('Invalid content server URL')
   }
-  const isLoopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)
-  if (url.protocol !== 'https:' && !(url.protocol === 'http:' && isLoopback)) {
+  if (url.protocol !== 'https:' && !isLocalHttp(url)) {
     throw new UsageError('The content server URL must be https (http only for localhost)')
+  }
+  if (url.username || url.password || url.href.includes('?') || url.href.includes('#')) {
+    throw new UsageError('Use a content server base URL without credentials, a query or a fragment')
   }
 
   return {
@@ -116,11 +122,10 @@ export function parseSeedArgs(argv: string[]): SeedOptions {
 export function assertAllowedContentServer(contentServerUrl: string, rawAllowedHosts: string | undefined): void {
   if (!rawAllowedHosts || rawAllowedHosts.trim() === '') return
   const allowedHosts = parseAllowedContentServerHosts(rawAllowedHosts)
-  const { hostname, protocol } = new URL(contentServerUrl)
+  const url = new URL(contentServerUrl)
   // Loopback over http stays allowed for local rehearsals.
-  const isLocal = protocol === 'http:'
-  if (!isLocal && !isAllowedContentServerUrl(contentServerUrl, allowedHosts)) {
-    throw new UsageError(`${hostname} is not in ALLOWED_CONTENT_SERVER_HOSTS`)
+  if (!isLocalHttp(url) && !isAllowedContentServerUrl(contentServerUrl, allowedHosts)) {
+    throw new UsageError(`${url.hostname} is not in ALLOWED_CONTENT_SERVER_HOSTS`)
   }
 }
 
@@ -258,7 +263,7 @@ export function formatReport(options: SeedOptions, report: SeedReport): string[]
 async function createStorage(options: SeedOptions): Promise<IContentStorageComponent> {
   const logs = await createLogComponent({})
   if (options.bucket) {
-    // Only AWS_REGION is read from config; the bucket is always the one passed explicitly, never BUCKET.
+    // The bucket comes from the CLI. Loaded AWS settings can also affect the SDK credential chain.
     const config = await createDotEnvConfigComponent({ path: ['.env.default', '.env'] })
     return await createAwsS3BasedFileSystemContentStorage({ config, logs }, options.bucket)
   }

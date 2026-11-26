@@ -2,6 +2,8 @@ import { isValidEntityId } from './validation'
 
 /** Snapshot hashes are content hashes; the fetcher rejects longer ones, so a marker for them is never read. */
 const MAX_SNAPSHOT_HASH_LENGTH = 128
+const MAX_REPLACED_HASHES = 1000
+const MAX_CLOCK_SKEW_MS = 24 * 60 * 60 * 1000
 
 /**
  * Storage key of the marker that records a snapshot as processed. Shared by the synchronizer's
@@ -22,8 +24,31 @@ export function isValidSnapshotHash(hash: unknown): hash is string {
 export type ParsedSnapshotHashes = {
   /** Unique valid hashes, in response order. */
   hashes: string[]
-  /** Entries without a valid `hash`. */
+  /** Entries the synchronizer would discard. */
   invalid: number
+}
+
+function isUsableTimestamp(value: unknown, latest: number): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= latest
+}
+
+// Match the fields snapshots-fetcher checks before it advances a server's pointer-change cursor.
+function hasUsableSnapshotMetadata(entry: unknown, latest: number): entry is { hash: string } {
+  if (!entry || typeof entry !== 'object' || !('hash' in entry) || !isValidSnapshotHash(entry.hash)) return false
+  if (!('timeRange' in entry)) return false
+  const range = entry.timeRange
+  if (!range || typeof range !== 'object' || !('initTimestamp' in range) || !('endTimestamp' in range)) return false
+  const { initTimestamp, endTimestamp } = range
+  if (
+    !isUsableTimestamp(initTimestamp, latest) ||
+    !isUsableTimestamp(endTimestamp, latest) ||
+    initTimestamp > endTimestamp
+  ) {
+    return false
+  }
+  if (!('replacedSnapshotHashes' in entry) || entry.replacedSnapshotHashes === undefined) return true
+  const hashes = entry.replacedSnapshotHashes
+  return Array.isArray(hashes) && hashes.length <= MAX_REPLACED_HASHES && hashes.every(isValidSnapshotHash)
 }
 
 /**
@@ -40,10 +65,10 @@ export function parseSnapshotHashes(body: unknown): ParsedSnapshotHashes {
 
   const hashes = new Set<string>()
   let invalid = 0
+  const latest = Date.now() + MAX_CLOCK_SKEW_MS
   for (const entry of body) {
-    const hash: unknown = typeof entry === 'object' && entry !== null && 'hash' in entry ? entry.hash : undefined
-    if (isValidSnapshotHash(hash)) {
-      hashes.add(hash)
+    if (hasUsableSnapshotMetadata(entry, latest)) {
+      hashes.add(entry.hash)
     } else {
       invalid++
     }

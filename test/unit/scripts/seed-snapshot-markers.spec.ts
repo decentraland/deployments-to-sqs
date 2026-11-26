@@ -45,6 +45,9 @@ describe('when parsing the seed script arguments', () => {
     ['both targets', ['https://dcl.dev/content', '--bucket', 'b', '--folder', 'f']],
     ['no URL', ['--bucket', 'b']],
     ['a plain http URL', ['http://dcl.dev/content', '--bucket', 'b']],
+    ['a URL with credentials', ['https://user:pass@dcl.dev/content', '--bucket', 'b']],
+    ['a URL with a query', ['https://dcl.dev/content?x=1', '--bucket', 'b']],
+    ['a URL with a fragment', ['https://dcl.dev/content#section', '--bucket', 'b']],
     ['an unparseable URL', ['not a url', '--bucket', 'b']],
     ['an unknown flag', ['https://dcl.dev/content', '--bucket', 'b', '--force']]
   ])('and the arguments have %s', (_name, args) => {
@@ -71,6 +74,11 @@ describe('when parsing the seed script arguments', () => {
 describe('when checking the content server against the allowlist', () => {
   let rawAllowedHosts: string | undefined
   let contentServerUrl: string
+
+  it('only exempts loopback HTTP from an explicit allowlist', () => {
+    expect(() => assertAllowedContentServer('http://other-host/content', 'dcl.dev')).toThrow(UsageError)
+    expect(() => assertAllowedContentServer('http://[::1]:6969/content', 'dcl.dev')).not.toThrow()
+  })
 
   beforeEach(() => {
     contentServerUrl = 'https://dcl.dev/content'
@@ -169,7 +177,8 @@ describe('when fetching the snapshot hashes', () => {
 
   describe('and the server answers with snapshots', () => {
     beforeEach(() => {
-      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify([{ hash: 'bafyone' }, { hash: '../x' }])))
+      const listing = [{ hash: 'bafyone', timeRange: { initTimestamp: 0, endTimestamp: 1 } }, { hash: '../x' }]
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify(listing)))
     })
 
     it('should request /snapshots and return the valid hashes', async () => {
