@@ -1,4 +1,4 @@
-import { AppComponents } from '../../../src/types'
+import { AppComponents, EntityDownloadError } from '../../../src/types'
 import { createDeployerComponent } from '../../../src/adapters/deployer'
 import {
   configMock,
@@ -159,6 +159,8 @@ describe('DeployerComponent', () => {
 
     const deployer = await createDeployerComponent(components)
     await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+    // The job body settles after scheduleEntityDeployment returns.
+    await jest.advanceTimersByTimeAsync(0)
 
     expect(metricsMock.increment).toHaveBeenCalledWith('entity_deployment_failure', {
       retryable: 'false',
@@ -179,6 +181,104 @@ describe('DeployerComponent', () => {
       retryable: 'true'
     })
     expect(mockEntity.markAsDeployed).not.toHaveBeenCalled()
+  })
+
+  describe('when publishing the notifications fails after the entity was downloaded', () => {
+    let callOrder: string[]
+
+    beforeEach(async () => {
+      callOrder = []
+      storageMock.exist.mockResolvedValueOnce(false)
+      entityDownloaderMock.downloadEntity.mockResolvedValueOnce({})
+      entityDownloaderMock.discardEntityFile.mockImplementationOnce(async () => {
+        callOrder.push('discardEntityFile')
+      })
+      ;(mockEntity.markAsDeployed as jest.Mock).mockImplementationOnce(async () => {
+        callOrder.push('markAsDeployed')
+      })
+    })
+
+    describe('and the error is retryable', () => {
+      beforeEach(async () => {
+        snsPublisherMock.publishMessage.mockRejectedValueOnce(new Error('SNS throttled'))
+        const deployer = await createDeployerComponent(components)
+        await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+        await jest.advanceTimersByTimeAsync(0)
+      })
+
+      it('should remove the stored entity file so the re-stream retries it', () => {
+        expect(entityDownloaderMock.discardEntityFile).toHaveBeenCalledWith(mockEntity)
+      })
+
+      it('should not mark the entity as deployed', () => {
+        expect(mockEntity.markAsDeployed).not.toHaveBeenCalled()
+      })
+    })
+
+    describe('and the error is non-retryable', () => {
+      beforeEach(async () => {
+        snsPublisherMock.publishMessage.mockRejectedValueOnce(new Error('status: 400'))
+        const deployer = await createDeployerComponent(components)
+        await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+        await jest.advanceTimersByTimeAsync(0)
+      })
+
+      it('should remove the stored entity file before marking the entity as deployed', () => {
+        expect(callOrder).toEqual(['discardEntityFile', 'markAsDeployed'])
+      })
+    })
+
+    describe('and the error is a 429', () => {
+      beforeEach(async () => {
+        snsPublisherMock.publishMessage.mockRejectedValueOnce(new Error('status: 429'))
+        const deployer = await createDeployerComponent(components)
+        await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+        await jest.advanceTimersByTimeAsync(0)
+      })
+
+      it('should not mark the entity as deployed, so it is retried', () => {
+        expect(mockEntity.markAsDeployed).not.toHaveBeenCalled()
+      })
+
+      it('should record the failure as retryable', () => {
+        expect(metricsMock.increment).toHaveBeenCalledWith('entity_deployment_failure', {
+          retryable: 'true',
+          entityType: mockEntity.entityType
+        })
+      })
+    })
+  })
+
+  describe('when marking the entity as deployed fails after the notifications were published', () => {
+    beforeEach(async () => {
+      storageMock.exist.mockResolvedValueOnce(false)
+      entityDownloaderMock.downloadEntity.mockResolvedValueOnce({})
+      snsPublisherMock.publishMessage.mockResolvedValue()
+      ;(mockEntity.markAsDeployed as jest.Mock).mockRejectedValueOnce(new Error('mark failed'))
+      const deployer = await createDeployerComponent(components)
+      await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+      await jest.advanceTimersByTimeAsync(0)
+    })
+
+    it('should keep the stored entity file, so the entity is not announced twice', () => {
+      expect(entityDownloaderMock.discardEntityFile).not.toHaveBeenCalled()
+      expect(metricsMock.increment).toHaveBeenCalledWith('entity_mark_as_deployed_failure', { entityType: 'scene' })
+      expect(metricsMock.increment).not.toHaveBeenCalledWith('entity_deployment_failure', expect.anything())
+    })
+  })
+
+  describe('when the entity download fails', () => {
+    beforeEach(async () => {
+      storageMock.exist.mockResolvedValueOnce(false)
+      entityDownloaderMock.downloadEntity.mockRejectedValueOnce(new EntityDownloadError('status: 404'))
+      const deployer = await createDeployerComponent(components)
+      await deployer.scheduleEntityDeployment(mockEntity, mockServers)
+      await jest.advanceTimersByTimeAsync(0)
+    })
+
+    it('should leave the entity file cleanup to the downloader', () => {
+      expect(entityDownloaderMock.discardEntityFile).not.toHaveBeenCalled()
+    })
   })
 
   describe('entity age filter', () => {

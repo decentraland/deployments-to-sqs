@@ -61,6 +61,7 @@ async function createSnsPublisherComponent(
         metrics.increment('sns_publish_success', { type: options.type })
       } catch (error: any) {
         logger.error('Failed to publish message', {
+          type: options.type,
           entityId: entity.entityId,
           entityType: entity.entityType,
           error: error?.message,

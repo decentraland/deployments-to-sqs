@@ -1086,7 +1086,7 @@
     ajv-errors "^3.0.0"
     ajv-keywords "^5.1.0"
 
-"@dcl/snapshots-fetcher@^11.0.0":
+"@dcl/snapshots-fetcher@11.0.0":
   version "11.0.0"
   resolved "https://registry.yarnpkg.com/@dcl/snapshots-fetcher/-/snapshots-fetcher-11.0.0.tgz#05145f71f497525e53799538ec450c15236253eb"
   integrity sha512-UJSjzeq6cyExFDKXP8tRmEtzY5wUwIrp6Blah0lY3kt5Oi6n9w7qD/sCrcpcdBbhdvpw1v4xGZph6uGf1dK2Jg==

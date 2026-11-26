@@ -33,6 +33,16 @@ export const metricDeclarations = {
     type: IMetricsComponent.CounterType,
     labelNames: ['entityType', 'retryable']
   },
+  entity_file_discard_failure: {
+    help: 'Failed removals of an unpublished entity file that may suppress a retry.',
+    type: IMetricsComponent.CounterType,
+    labelNames: ['entityType']
+  },
+  entity_mark_as_deployed_failure: {
+    help: 'Failures to record completion of an entity after publication or a permanent download error.',
+    type: IMetricsComponent.CounterType,
+    labelNames: ['entityType']
+  },
   schedule_entity_deployment_attempt: {
     help: 'Count attempts to schedule entity deployment',
     type: IMetricsComponent.CounterType,

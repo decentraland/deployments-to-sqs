@@ -63,5 +63,6 @@ export const snsPublisherMock: jest.Mocked<SnsPublisherComponent> = {
 }
 
 export const entityDownloaderMock: jest.Mocked<EntityDownloaderComponent> = {
-  downloadEntity: jest.fn()
+  downloadEntity: jest.fn(),
+  discardEntityFile: jest.fn()
 }

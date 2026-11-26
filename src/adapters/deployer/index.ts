@@ -3,6 +3,7 @@ import { AppComponents, EntityDownloadError, SnsPublisherComponent } from '../..
 import { isValidEntityId } from '../../logic/validation'
 import { toEntityTypeLabel } from '../../logic/entity-type-label'
 import { getPositiveInt } from '../../logic/tuning'
+import { isNonRetryableErrorMessage } from '../../logic/retryable'
 
 export async function createDeployerComponent(
   components: Pick<
@@ -114,10 +115,12 @@ export async function createDeployerComponent(
               // Queued -> running; the finally below settles it even if the job throws.
               components.metrics.decrement('download_queue_size')
               components.metrics.increment('download_queue_pending')
+              let published = false
               try {
                 const metadata = await components.entityDownloader.downloadEntity(entity, servers)
 
                 await publishDeploymentNotifications({ ...entity, metadata }, servers)
+                published = true
 
                 await markAsDeployed()
 
@@ -128,8 +131,17 @@ export async function createDeployerComponent(
                 if (error instanceof EntityDownloadError) {
                   return
                 }
+                if (published) {
+                  logger.error('Failed to mark a published entity as deployed', {
+                    entityId: entity.entityId,
+                    error: error instanceof Error ? error.message : String(error)
+                  })
+                  components.metrics.increment('entity_mark_as_deployed_failure', { entityType: entityTypeLabel })
+                  return
+                }
 
-                const isNotRetryable = /status: 4\d{2}/.test(error.message)
+                // Publish (SNS) errors rarely carry `status: NNN`, so this is mostly false here.
+                const isNonRetryable = isNonRetryableErrorMessage(error?.message)
 
                 logger.error('Failed to publish entity', {
                   entityId: entity.entityId,
@@ -139,11 +151,16 @@ export async function createDeployerComponent(
                 })
 
                 components.metrics.increment('entity_deployment_failure', {
-                  retryable: isNotRetryable ? 'false' : 'true',
+                  retryable: isNonRetryable ? 'false' : 'true',
                   entityType: entityTypeLabel
                 })
 
-                if (isNotRetryable) {
+                // Unpublished: drop the stored entity file so a retry isn't skipped as "already stored".
+                // Once published it is kept, but delivery stays at-least-once: a concurrent job for the
+                // same entity, or a publish that reached only one topic, can announce it again.
+                await components.entityDownloader.discardEntityFile(entity)
+
+                if (isNonRetryable) {
                   logger.error('Failed to download entity', {
                     entityId: entity.entityId,
                     entityType: entity.entityType,
