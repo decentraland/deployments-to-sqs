@@ -262,6 +262,8 @@ describe('DeployerComponent', () => {
 
     it('should keep the stored entity file, so the entity is not announced twice', () => {
       expect(entityDownloaderMock.discardEntityFile).not.toHaveBeenCalled()
+      expect(metricsMock.increment).toHaveBeenCalledWith('entity_mark_as_deployed_failure', { entityType: 'scene' })
+      expect(metricsMock.increment).not.toHaveBeenCalledWith('entity_deployment_failure', expect.anything())
     })
   })
 

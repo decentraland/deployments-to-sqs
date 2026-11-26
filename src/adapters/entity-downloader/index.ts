@@ -29,6 +29,7 @@ export async function createEntityDownloaderComponent(
     try {
       await components.storage.delete([entity.entityId])
     } catch (error: unknown) {
+      components.metrics.increment('entity_file_discard_failure', { entityType: toEntityTypeLabel(entity.entityType) })
       logger.error('Failed to remove the stored entity file', {
         entityId: entity.entityId,
         entityType: entity.entityType,
@@ -49,7 +50,10 @@ export async function createEntityDownloaderComponent(
         servers: servers.join(',')
       })
 
+      let wasStored: boolean | undefined
       try {
+        // Another job may have completed while this one waited in the download queue.
+        wasStored = await components.storage.exist(entity.entityId)
         const { metadata } = (await downloadEntityAndContentFiles(
           { ...components, fetcher: components.fetch },
           entity.entityId,
@@ -68,14 +72,15 @@ export async function createEntityDownloaderComponent(
         components.metrics.increment('entity_download_success', { entityType: entityTypeLabel })
         logger.info('Entity stored', { entityId: entity.entityId, entityType: entity.entityType })
         return metadata
-      } catch (error: any) {
+      } catch (cause: unknown) {
+        const error = cause instanceof Error ? cause : new Error(String(cause))
         logger.error('Failed to download entity', {
           entityId: entity.entityId,
           entityType: entity.entityType,
-          errorMessage: error?.message
+          errorMessage: error.message
         })
 
-        const isNonRetryable = isNonRetryableErrorMessage(error?.message)
+        const isNonRetryable = wasStored !== undefined && isNonRetryableErrorMessage(error.message)
 
         components.metrics.increment('entity_download_failure', {
           entityType: entityTypeLabel,
@@ -84,15 +89,23 @@ export async function createEntityDownloaderComponent(
 
         // The entity file is stored before its content files, so a failure can leave it behind;
         // the deployer's dedup check would then skip every retry and the event would be lost.
-        if (!fetcherHandledStoredBytes(error?.message, entity.entityId)) {
+        if (wasStored === false && !fetcherHandledStoredBytes(error.message, entity.entityId)) {
           await discardEntityFile(entity)
         }
 
         if (isNonRetryable) {
-          await markAsDeployed()
+          try {
+            await markAsDeployed()
+          } catch (markError: unknown) {
+            logger.error('Failed to mark an unretryable entity download as deployed', {
+              entityId: entity.entityId,
+              error: markError instanceof Error ? markError.message : String(markError)
+            })
+            components.metrics.increment('entity_mark_as_deployed_failure', { entityType: entityTypeLabel })
+          }
         }
 
-        throw new EntityDownloadError(error?.message, {
+        throw new EntityDownloadError(error.message, {
           entity,
           error
         })

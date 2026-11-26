@@ -28,6 +28,7 @@ describe('EntityDownloaderComponent', () => {
     }
 
     downloadEntityAndContentFilesMock = downloadEntityAndContentFiles as jest.Mock
+    storageMock.exist.mockResolvedValue(false)
 
     mockEntity = {
       entityId: '123',
@@ -87,6 +88,8 @@ describe('EntityDownloaderComponent', () => {
     it.each([false, true])('keeps the verified file (first read is stale: %s)', async (staleFirstRead) => {
       const storage = createInMemoryStorage()
       await storage.storeStream(id, Readable.from([Buffer.from('shared fixture')]))
+      // Another download adds the blob between our queue-start check and the fetcher's own lookup.
+      jest.spyOn(storage, 'exist').mockResolvedValueOnce(false)
       if (staleFirstRead) {
         const stale = createInMemoryStorage()
         await stale.storeStream(id, Readable.from([Buffer.from('incomplete')]))
@@ -104,6 +107,33 @@ describe('EntityDownloaderComponent', () => {
   })
 
   describe('should handle non-retryable errors', () => {
+    it('preserves the original download error when recording completion fails', async () => {
+      downloadEntityAndContentFilesMock.mockRejectedValueOnce(new Error('status: 404'))
+      ;(mockEntity.markAsDeployed as jest.Mock).mockRejectedValueOnce(new Error('checkpoint unavailable'))
+      const downloader = await createEntityDownloaderComponent(components)
+      await expect(downloader.downloadEntity(mockEntity, mockServers)).rejects.toMatchObject({
+        name: 'EntityDownloadError',
+        message: 'status: 404'
+      })
+      expect(storageMock.delete).toHaveBeenCalledTimes(1)
+      expect(metricsMock.increment).toHaveBeenCalledWith('entity_mark_as_deployed_failure', { entityType: 'scene' })
+    })
+
+    it('preserves a previously stored file when a later job cannot read it', async () => {
+      storageMock.exist.mockResolvedValueOnce(true)
+      downloadEntityAndContentFilesMock.mockRejectedValueOnce(new Error('storage unavailable'))
+      const downloader = await createEntityDownloaderComponent(components)
+      await expect(downloader.downloadEntity(mockEntity, mockServers)).rejects.toThrow('storage unavailable')
+      expect(storageMock.delete).not.toHaveBeenCalled()
+    })
+
+    it('retries a failed storage presence check without deleting or marking the entity', async () => {
+      storageMock.exist.mockRejectedValueOnce(new Error('storage status: 403'))
+      const downloader = await createEntityDownloaderComponent(components)
+      await expect(downloader.downloadEntity(mockEntity, mockServers)).rejects.toThrow('storage status: 403')
+      expect(storageMock.delete).not.toHaveBeenCalled()
+      expect(mockEntity.markAsDeployed).not.toHaveBeenCalled()
+    })
     it('and mark the entity as deployed when the entity has the markAsDeployed defined', async () => {
       downloadEntityAndContentFilesMock.mockRejectedValueOnce(new Error('status: 404'))
 
@@ -237,6 +267,7 @@ describe('EntityDownloaderComponent', () => {
       })
 
       it('should log the removal failure', () => {
+        expect(metricsMock.increment).toHaveBeenCalledWith('entity_file_discard_failure', { entityType: 'scene' })
         expect(logsMock.getLogger('EntityDownloader').error).toHaveBeenCalledWith(
           'Failed to remove the stored entity file',
           expect.objectContaining({ entityId: mockEntity.entityId, error: 'S3 unavailable' })

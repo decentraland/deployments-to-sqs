@@ -131,6 +131,14 @@ export async function createDeployerComponent(
                 if (error instanceof EntityDownloadError) {
                   return
                 }
+                if (published) {
+                  logger.error('Failed to mark a published entity as deployed', {
+                    entityId: entity.entityId,
+                    error: error instanceof Error ? error.message : String(error)
+                  })
+                  components.metrics.increment('entity_mark_as_deployed_failure', { entityType: entityTypeLabel })
+                  return
+                }
 
                 // Publish (SNS) errors rarely carry `status: NNN`, so this is mostly false here.
                 const isNonRetryable = isNonRetryableErrorMessage(error?.message)
@@ -150,9 +158,7 @@ export async function createDeployerComponent(
                 // Unpublished: drop the stored entity file so a retry isn't skipped as "already stored".
                 // Once published it is kept, but delivery stays at-least-once: a concurrent job for the
                 // same entity, or a publish that reached only one topic, can announce it again.
-                if (!published) {
-                  await components.entityDownloader.discardEntityFile(entity)
-                }
+                await components.entityDownloader.discardEntityFile(entity)
 
                 if (isNonRetryable) {
                   logger.error('Failed to download entity', {
