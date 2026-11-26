@@ -1,7 +1,7 @@
 /**
  * Operator script: marks every snapshot a content server lists as processed, so adding that server to
- * CONTENT_SERVER_URLS skips the one-time snapshot backfill. Pointer changes then start after the
- * newest snapshot; entities only in older snapshots are never announced.
+ * CONTENT_SERVER_URLS skips the one-time snapshot backfill. Pointer polling overlaps the newest
+ * snapshot by 20 minutes; entities only in older history outside that window are never announced.
  *
  * Dry run by default; writes only with --apply.
  *
@@ -117,14 +117,22 @@ export function parseSeedArgs(argv: string[]): SeedOptions {
  *
  * @param contentServerUrl - The validated content server URL.
  * @param rawAllowedHosts - ALLOWED_CONTENT_SERVER_HOSTS from the environment, if set.
+ * @param writingToBucket - Shared markers require an explicit allowlisted HTTPS source.
  * @throws UsageError when the variable is set and the host is not on it.
  */
-export function assertAllowedContentServer(contentServerUrl: string, rawAllowedHosts: string | undefined): void {
-  if (!rawAllowedHosts || rawAllowedHosts.trim() === '') return
+export function assertAllowedContentServer(
+  contentServerUrl: string,
+  rawAllowedHosts: string | undefined,
+  writingToBucket = false
+): void {
+  if (!rawAllowedHosts?.trim()) {
+    if (writingToBucket) throw new UsageError('Export ALLOWED_CONTENT_SERVER_HOSTS before using --bucket with --apply')
+    return
+  }
   const allowedHosts = parseAllowedContentServerHosts(rawAllowedHosts)
   const url = new URL(contentServerUrl)
   // Loopback over http stays allowed for local rehearsals.
-  if (!isLocalHttp(url) && !isAllowedContentServerUrl(contentServerUrl, allowedHosts)) {
+  if ((writingToBucket || !isLocalHttp(url)) && !isAllowedContentServerUrl(contentServerUrl, allowedHosts)) {
     throw new UsageError(`${url.hostname} is not in ALLOWED_CONTENT_SERVER_HOSTS`)
   }
 }
@@ -292,7 +300,11 @@ async function main(): Promise<number> {
   try {
     // The real environment only: .env.default would always set it.
     const env = createConfigComponent(process.env)
-    assertAllowedContentServer(options.contentServerUrl, await env.getString('ALLOWED_CONTENT_SERVER_HOSTS'))
+    assertAllowedContentServer(
+      options.contentServerUrl,
+      await env.getString('ALLOWED_CONTENT_SERVER_HOSTS'),
+      Boolean(options.bucket && options.apply)
+    )
   } catch (error: unknown) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     return 2

@@ -80,6 +80,14 @@ describe('when checking the content server against the allowlist', () => {
     expect(() => assertAllowedContentServer('http://[::1]:6969/content', 'dcl.dev')).not.toThrow()
   })
 
+  it('requires a listed HTTPS source before writing shared bucket markers', () => {
+    expect(() => assertAllowedContentServer('https://dcl.dev/content', undefined, true)).toThrow(
+      /ALLOWED_CONTENT_SERVER_HOSTS/
+    )
+    expect(() => assertAllowedContentServer('http://localhost/content', 'dcl.dev', true)).toThrow(UsageError)
+    expect(() => assertAllowedContentServer('https://dcl.dev/content', 'dcl.dev', true)).not.toThrow()
+  })
+
   beforeEach(() => {
     contentServerUrl = 'https://dcl.dev/content'
   })
