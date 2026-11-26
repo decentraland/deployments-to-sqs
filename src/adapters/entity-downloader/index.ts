@@ -4,8 +4,15 @@ import { toEntityTypeLabel } from '../../logic/entity-type-label'
 import { getPositiveInt } from '../../logic/tuning'
 import { isNonRetryableErrorMessage } from '../../logic/retryable'
 
-// snapshots-fetcher keeps a hash-valid stored file that is not entity JSON: it may be legitimate content.
-const LIBRARY_KEPT_STORED_FILE = /the local copy was kept/
+// The fetcher rechecks a mismatch before evicting and preserves bytes that are not entity JSON.
+// Another delete here can remove a valid copy that replaced the one we read.
+function fetcherHandledStoredBytes(message: unknown, entityId: string): boolean {
+  return (
+    typeof message === 'string' &&
+    (message.startsWith(`The stored entity file for ${entityId} failed content-hash verification;`) ||
+      message.startsWith(`Failed to parse the downloaded entity file for ${entityId};`))
+  )
+}
 
 export async function createEntityDownloaderComponent(
   components: Pick<AppComponents, 'config' | 'logs' | 'storage' | 'fetch' | 'metrics'>
@@ -77,7 +84,7 @@ export async function createEntityDownloaderComponent(
 
         // The entity file is stored before its content files, so a failure can leave it behind;
         // the deployer's dedup check would then skip every retry and the event would be lost.
-        if (!LIBRARY_KEPT_STORED_FILE.test(error?.message ?? '')) {
+        if (!fetcherHandledStoredBytes(error?.message, entity.entityId)) {
           await discardEntityFile(entity)
         }
 

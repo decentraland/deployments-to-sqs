@@ -1,4 +1,6 @@
 import { downloadEntityAndContentFiles } from '@dcl/snapshots-fetcher'
+import { createInMemoryStorage } from '@dcl/catalyst-storage'
+import { Readable } from 'stream'
 import { AppComponents, EntityDownloadError, EntityDownloaderComponent } from '../../../src/types'
 import { createEntityDownloaderComponent } from '../../../src/adapters/entity-downloader'
 import { configMock, fetcherMock, logsMock, metricsMock, storageMock } from '../../mocks/components'
@@ -79,6 +81,28 @@ describe('EntityDownloaderComponent', () => {
     expect(mockEntity.markAsDeployed).not.toHaveBeenCalled()
   })
 
+  describe('when the real fetcher verifies bytes already in storage', () => {
+    const id = 'bafkreicvjqi5cwjspwpwqlqdhrhfuwucn6lna3tby3na3343jalvubwfmi' // CIDv1 of "shared fixture"
+
+    it.each([false, true])('keeps the verified file (first read is stale: %s)', async (staleFirstRead) => {
+      const storage = createInMemoryStorage()
+      await storage.storeStream(id, Readable.from([Buffer.from('shared fixture')]))
+      if (staleFirstRead) {
+        const stale = createInMemoryStorage()
+        await stale.storeStream(id, Readable.from([Buffer.from('incomplete')]))
+        jest.spyOn(storage, 'retrieve').mockImplementationOnce(() => stale.retrieve(id))
+      }
+      const real = jest.requireActual<typeof import('@dcl/snapshots-fetcher')>('@dcl/snapshots-fetcher')
+      downloadEntityAndContentFilesMock.mockImplementationOnce(real.downloadEntityAndContentFiles)
+      const downloader = await createEntityDownloaderComponent({ ...components, storage })
+      await expect(downloader.downloadEntity({ ...mockEntity, entityId: id }, mockServers)).rejects.toThrow(
+        staleFirstRead ? /failed content-hash verification/ : /Failed to parse the downloaded entity file/
+      )
+      expect(await storage.exist(id)).toBe(true)
+      expect(fetcherMock.fetch).not.toHaveBeenCalled()
+    })
+  })
+
   describe('should handle non-retryable errors', () => {
     it('and mark the entity as deployed when the entity has the markAsDeployed defined', async () => {
       downloadEntityAndContentFilesMock.mockRejectedValueOnce(new Error('status: 404'))
@@ -116,7 +140,7 @@ describe('EntityDownloaderComponent', () => {
 
     beforeEach(async () => {
       callOrder = []
-      storageMock.delete.mockImplementationOnce(async () => {
+      storageMock.delete.mockReset().mockImplementationOnce(async () => {
         callOrder.push('delete')
       })
       ;(mockEntity.markAsDeployed as jest.Mock).mockImplementationOnce(async () => {
