@@ -10,6 +10,7 @@ import { createMetricsComponent } from '@dcl/metrics'
 import { AppComponents, GlobalContext } from './types'
 import { getPositiveInt } from './logic/tuning'
 import { metricDeclarations } from './metrics'
+import { snapshotMarkerKey } from './logic/snapshot-markers'
 import {
   createJobQueue,
   createSynchronizer,
@@ -83,25 +84,23 @@ export async function initComponents(): Promise<AppComponents> {
     entityDownloader
   })
 
-  const key = (hash: string) => `stored-snapshot-${hash}`
-
   const snapshotStorageLogger = logs.getLogger('ISnapshotStorageComponent')
 
   const snapshotStorage: ISnapshotStorageComponent & IProcessedSnapshotStorageComponent = {
     async has(snapshotHash: string) {
-      const exists = await storage.exist(key(snapshotHash))
+      const exists = await storage.exist(snapshotMarkerKey(snapshotHash))
       snapshotStorageLogger.debug('HasSnapshot', { exists: exists ? 'true' : 'false', snapshotHash })
       return exists
     },
     async markSnapshotAsProcessed(snapshotHash) {
       snapshotStorageLogger.debug('MarkSnapshotAsProcessed', { snapshotHash })
-      await storage.storeStream(key(snapshotHash), Readable.from([]))
+      await storage.storeStream(snapshotMarkerKey(snapshotHash), Readable.from([]))
     },
     async filterProcessedSnapshotsFrom(snapshotHashes) {
       snapshotStorageLogger.debug('FilterProcessedSnapshotsFrom', { cids: snapshotHashes.join(',') })
       const ret = new Set<string>()
       for (const hash of snapshotHashes) {
-        if (await storage.exist(key(hash))) {
+        if (await storage.exist(snapshotMarkerKey(hash))) {
           ret.add(hash)
         }
       }
