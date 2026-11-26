@@ -5,6 +5,7 @@ import {
   fetchSnapshotHashes,
   formatReport,
   listingProblem,
+  main,
   parseSeedArgs,
   SeedOptions,
   seedSnapshotMarkers,
@@ -84,7 +85,7 @@ describe('when checking the content server against the allowlist', () => {
     expect(() => assertAllowedContentServer('https://dcl.dev/content', undefined, true)).toThrow(
       /ALLOWED_CONTENT_SERVER_HOSTS/
     )
-    expect(() => assertAllowedContentServer('http://localhost/content', 'dcl.dev', true)).toThrow(UsageError)
+    expect(() => assertAllowedContentServer('http://localhost/content', 'localhost', true)).toThrow(/HTTPS/)
     expect(() => assertAllowedContentServer('https://dcl.dev/content', 'dcl.dev', true)).not.toThrow()
   })
 
@@ -120,6 +121,23 @@ describe('when checking the content server against the allowlist', () => {
     it('should throw a usage error', () => {
       expect(() => assertAllowedContentServer(contentServerUrl, rawAllowedHosts)).toThrow(UsageError)
     })
+  })
+})
+
+describe('when the CLI would write S3 markers without an exported allowlist', () => {
+  it('should return a usage error before any network request', async () => {
+    const env = jest.replaceProperty(process, 'env', { ...process.env, ALLOWED_CONTENT_SERVER_HOSTS: '' })
+    const fetchSpy = jest.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('unexpected fetch'))
+    const stderr = jest.spyOn(process.stderr, 'write').mockReturnValue(true)
+    try {
+      await expect(main(['https://seed-fixture.invalid/content', '--bucket', 'test', '--apply'])).resolves.toBe(2)
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('ALLOWED_CONTENT_SERVER_HOSTS'))
+      expect(fetchSpy).not.toHaveBeenCalled()
+    } finally {
+      env.restore()
+      fetchSpy.mockRestore()
+      stderr.mockRestore()
+    }
   })
 })
 

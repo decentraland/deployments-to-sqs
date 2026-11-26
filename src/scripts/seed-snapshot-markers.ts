@@ -112,13 +112,13 @@ export function parseSeedArgs(argv: string[]): SeedOptions {
 }
 
 /**
- * Checks the content server against ALLOWED_CONTENT_SERVER_HOSTS when that variable is set in the
- * environment: markers are keyed by hash only, so seeding from the wrong server skips real backfills.
+ * Checks the source of hash-only markers. An S3 write requires HTTPS and an explicit allowlist.
+ * Dry runs and folder rehearsals use the allowlist when supplied and permit local HTTP fixtures.
  *
  * @param contentServerUrl - The validated content server URL.
  * @param rawAllowedHosts - ALLOWED_CONTENT_SERVER_HOSTS from the environment, if set.
  * @param writingToBucket - Shared markers require an explicit allowlisted HTTPS source.
- * @throws UsageError when the variable is set and the host is not on it.
+ * @throws UsageError when the source or its configuration does not meet the selected write policy.
  */
 export function assertAllowedContentServer(
   contentServerUrl: string,
@@ -131,6 +131,7 @@ export function assertAllowedContentServer(
   }
   const allowedHosts = parseAllowedContentServerHosts(rawAllowedHosts)
   const url = new URL(contentServerUrl)
+  if (writingToBucket && url.protocol !== 'https:') throw new UsageError('S3 marker writes require an HTTPS source')
   // Loopback over http stays allowed for local rehearsals.
   if ((writingToBucket || !isLocalHttp(url)) && !isAllowedContentServerUrl(contentServerUrl, allowedHosts)) {
     throw new UsageError(`${url.hostname} is not in ALLOWED_CONTENT_SERVER_HOSTS`)
@@ -281,14 +282,14 @@ async function createStorage(options: SeedOptions): Promise<IContentStorageCompo
   return await createFolderBasedFileSystemContentStorage({ fs: createFsComponent(), logs }, options.folder)
 }
 
-async function main(): Promise<number> {
+export async function main(argv = process.argv.slice(2)): Promise<number> {
   const print = (line: string): void => {
     process.stdout.write(`${line}\n`)
   }
 
   let options: SeedOptions
   try {
-    options = parseSeedArgs(process.argv.slice(2))
+    options = parseSeedArgs(argv)
   } catch (error: unknown) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`)
     process.stderr.write(
